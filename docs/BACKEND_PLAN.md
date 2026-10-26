@@ -17,7 +17,7 @@ Hackathon (Startups track)**. Companion to
 
 | Area | Before | Now |
 |---|---|---|
-| Model provider | NVIDIA `build.nvidia.com` (Nemotron / GLM / DeepSeek) | **Meta Model API** (Muse Spark series) plus **Muse Spark Open** on Baseten |
+| Model provider | Previous third-party provider (non-Meta models) | **Meta Model API** (Muse Spark series) plus **Muse Spark Open** on Baseten |
 | Voice | Generic STT/TTS, not built | **Muse Voice Transcribe** for input; TTS stays pre-generated per nudge |
 | Multimodal | Not planned | **Muse Spark** reads a photo/screenshot and proposes tasks and habits |
 | Agent verifiability | Metrics only | Tool-call **trace**, per-step logs and an **eval suite** |
@@ -62,7 +62,7 @@ so this is a one-file change.
 Constraints that affect the build:
 
 - **Stage 1 judging is pass/fail on real Meta model use.** Generation, speech and
-  vision must all go through Meta models. NVIDIA is removed from the generation path.
+  vision must all go through Meta models. All non-Meta models are removed from the generation path.
 - **Credits:** $150 Meta API credits (claim by Nov 4, card required) plus Baseten
   ($100), Modal ($100) and Fireworks ($25) on request. The budget guard and the
   semantic cache are still needed to stay inside them.
@@ -165,7 +165,7 @@ confirm-gated `ToolProposal`s, `/metrics`.
 ### Phase 2b — Meta provider swap  *(Oct 27, hackathon)*
 
 - `app/models/client.py`: add `MetaClient` and `BasetenClient`; keep `FakeClient`
-  as the default when keys are empty. Remove `NvidiaClient` from the generation path.
+  as the default when keys are empty. Remove the old provider client from the generation path.
 - `app/models/registry.py`: new `ModelSpec` entries for the tiers in §2.
 - `app/models/router.py`: same deterministic hard rules → escalation → budget
   guard → semantic cache. Route `fast` to Baseten and `smart`/`deep`/`vision` to Meta.

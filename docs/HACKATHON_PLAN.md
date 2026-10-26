@@ -5,14 +5,14 @@
 - Today is Oct 26 (kickoff). Building window is Oct 27 – Nov 4. **Submission is due Wed Nov 4, 9:00 PM ET**. Judging runs Nov 5–8. The top 5 per track are announced Nov 9.
 - Judging rubric: Impact 30%, Use of Meta AI tooling 25%, Technical depth 25%→20%, Demo 25%. Stage 1 is a pass/fail check that Meta models are really used. The 3-minute demo video is the main artifact judges see.
 - Existing state (explored):
-  - Backend `nudgeai_bend`: FastAPI, Postgres/pgvector and Redis. Auth, habits, tasks, memory and chat with confirm-gated proposals are done. The LLM provider is **NVIDIA** (`app/models/client.py`, `registry.py`, `router.py`, `config.py`).
+  - Backend `nudgeai_bend`: FastAPI, Postgres/pgvector and Redis. Auth, habits, tasks, memory and chat with confirm-gated proposals are done. The previous LLM provider is being replaced by Meta (`app/models/client.py, `registry.py`, `router.py`, `config.py`).
   - Mobile `nudgeai_mobile`: Expo. Only onboarding exists, running on a mock adapter.
   - `Nudge/`: about 100 Figma PNG screens.
   - Missing: Nudge Engine, Insights, voice, push delivery, and nearly all mobile screens. No Meta integration anywhere.
 
 ## Risks to neutralise first
 1. **"New work only" rule.** The code was started Sept 27, so Phases 1–2 pre-date the event. Startups may build on an existing codebase, but what was built in the window must be clearly identified. Create a **fresh public repo on Oct 27** (git history was just removed) and commit the pre-event baseline as one tagged commit `pre-hackathon-baseline`. Everything after that is the hackathon work. Add a `HACKATHON.md` that lists what is new, and show the git diff in the demo.
-2. **Repos must be public: scrub secrets.** Make sure `nudgeai_bend/.env` is gitignored. Rotate the NVIDIA key. Add the Figma PNGs and the spec only if wanted.
+2. **Repos must be public: scrub secrets.** Make sure `nudgeai_bend/.env` is gitignored. Rotate any old provider keys. Add the Figma PNGs and the spec only if wanted.
 3. **Anti-projects.** Habit apps risk being judged "generic", and health or wellness advice is banned. Position NudgeAI as an agentic personal workflow agent, not a wellness coach. Avoid medical, nutrition and mental-health framing in the copy and the demo. Keep habits to productivity and work.
 4. **Impact (30%).** A habit tracker looks like a toy. Reframe the pitch as an agent that does real multi-step work: it reads your calendar and tasks, decides what to nudge and when, and proposes and executes reschedules after a confirmation. Add startup evidence: a landing page, a waitlist count and 3–5 real users or testimonials gathered during the week.
 
@@ -20,7 +20,7 @@
 "NudgeAI: a voice-first personal workflow agent. It decides when you need a nudge, so you get fewer, better interruptions, and it takes actions for you with verifiable, confirm-gated tool calls." This maps to Problem Statement 1 (Build for Your World) and targets Best Agentic Use-Case.
 
 ## Meta tooling integration (25% — go beyond a basic integration)
-- Replace NVIDIA with a **Meta Model API client** in `nudgeai_bend/app/models/client.py`, keeping the `FakeClient` for tests. Keep the tier routing in `router.py`, mapping the tiers to Muse Spark models.
+- Replace the previous provider with a **Meta Model API client** in `nudgeai_bend/app/models/client.py`, keeping the `FakeClient` for tests. Keep the tier routing in `router.py`, mapping the tiers to Muse Spark models.
 - **Muse Voice Transcribe** for voice input. Add a speech endpoint and a mobile mic button. This replaces the missing STT.
 - **Muse Spark Open 1026** (`meta-models/muse-spark-open-1026`, served on Baseten) for the Nudge Composer and insight phrasing. It also runs as a switchable backend provider. This qualifies for the $10K open-weights bonus and demonstrates the router choosing between the API and open weights.
 - **Muse Spark multimodal:** take a photo or screenshot of a whiteboard, a schedule or an email and turn it into tasks and habits. This surfaces a capability that goes beyond chat.
