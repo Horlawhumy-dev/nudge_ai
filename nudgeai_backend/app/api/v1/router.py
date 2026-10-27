@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from app.api.v1 import auth, chat, core, memory, ops
+
+api_router = APIRouter()
+api_router.include_router(auth.router)
+api_router.include_router(core.router)
+api_router.include_router(memory.router)
+api_router.include_router(chat.router)
+
+# ops sits outside the versioned prefix: /health and /metrics are infra endpoints.
+ops_router = ops.router
+
+__all__ = ["api_router", "ops_router"]
