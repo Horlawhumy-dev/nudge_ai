@@ -15,7 +15,14 @@ type ProgressRingProps = {
   labelSize?: 'sm' | 'md';
 };
 
-export function ProgressRing({ progress, size = 72, strokeWidth = 7, color, label, labelSize = 'md' }: ProgressRingProps) {
+export function ProgressRing({
+  progress,
+  size = 72,
+  strokeWidth = 7,
+  color,
+  label,
+  labelSize = 'md',
+}: ProgressRingProps) {
   const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(1, progress));
@@ -23,7 +30,14 @@ export function ProgressRing({ progress, size = 72, strokeWidth = 7, color, labe
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} style={styles.rotate}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.borderSoft} strokeWidth={strokeWidth} fill="none" />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={colors.borderSoft}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -38,7 +52,10 @@ export function ProgressRing({ progress, size = 72, strokeWidth = 7, color, labe
       </Svg>
       {label ? (
         <View style={styles.center}>
-          <Text variant={labelSize === 'sm' ? 'caption' : 'numeral'} style={labelSize === 'sm' ? styles.small : undefined}>
+          <Text
+            variant={labelSize === 'sm' ? 'caption' : 'numeral'}
+            style={labelSize === 'sm' ? styles.small : undefined}
+          >
             {label}
           </Text>
         </View>
@@ -49,6 +66,14 @@ export function ProgressRing({ progress, size = 72, strokeWidth = 7, color, labe
 
 const styles = StyleSheet.create({
   rotate: { transform: [{ rotate: '-90deg' }] },
-  center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  center: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   small: { fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { Animated, Pressable, StyleSheet, useAnimatedValue } from 'react-native';
 
 import { colors } from '@/theme';
 
@@ -14,14 +14,24 @@ const KNOB = 24;
 const PAD = 4;
 
 export function Toggle({ value, onValueChange, accessibilityLabel }: ToggleProps) {
-  const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const progress = useAnimatedValue(value ? 1 : 0);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: false }).start();
+    Animated.timing(progress, {
+      toValue: value ? 1 : 0,
+      duration: 160,
+      useNativeDriver: false,
+    }).start();
   }, [value, progress]);
 
-  const backgroundColor = progress.interpolate({ inputRange: [0, 1], outputRange: ['#E0E0E0', colors.primary] });
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [PAD, WIDTH - KNOB - PAD] });
+  const backgroundColor = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#E0E0E0', colors.primary],
+  });
+  const translateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [PAD, WIDTH - KNOB - PAD],
+  });
 
   return (
     <Pressable

@@ -29,5 +29,11 @@ export const priorityDotColor: Record<TaskPriority, string> = {
 };
 
 const styles = StyleSheet.create({
-  badge: { height: 34, paddingHorizontal: 16, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

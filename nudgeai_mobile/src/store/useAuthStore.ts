@@ -8,9 +8,18 @@ import { useTasksStore } from './useTasksStore';
 
 export type User = {
   id: string;
+  /** Full name from sign-up; shown on the profile. */
   name: string;
+  /** What reminders call the user (set in onboarding). Falls back to the first name. */
+  nickname?: string;
   email: string;
 };
+
+/** The short name used in greetings and AI replies. */
+export function displayName(user: User | null): string {
+  if (!user) return '';
+  return user.nickname?.trim() || user.name.trim().split(/\s+/)[0] || '';
+}
 
 /** Where the user is in the sign-in funnel; routes read this to decide what to show. */
 export type SessionStatus = 'signedOut' | 'unverified' | 'onboarding' | 'ready';
@@ -28,13 +37,18 @@ type AuthState = {
   verifyEmail: (code: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (password: string) => Promise<void>;
-  completeOnboarding: (displayName: string) => void;
+  completeOnboarding: (nickname: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'email'>>) => void;
   signOut: () => void;
 };
 
 const MOCK_LATENCY_MS = 600;
-const DEMO_USER: User = { id: 'user_demo', name: 'Rophy Alade', email: 'aladexrofiah@gmail.com' };
+const DEMO_USER: User = {
+  id: 'user_demo',
+  name: 'Rophy Alade',
+  nickname: 'Rophy',
+  email: 'aladexrofiah@gmail.com',
+};
 
 /**
  * Static session: no network. Every method is async and takes a beat so the screens exercise
@@ -82,9 +96,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ pendingEmail: null });
   },
 
-  completeOnboarding: (displayName) => {
+  completeOnboarding: (nickname) => {
     const { user } = get();
-    set({ status: 'ready', user: user ? { ...user, name: displayName.trim() || user.name } : user });
+    set({
+      status: 'ready',
+      user: user ? { ...user, nickname: nickname.trim() || user.nickname } : user,
+    });
   },
 
   updateProfile: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),

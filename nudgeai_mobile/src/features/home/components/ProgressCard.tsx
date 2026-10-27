@@ -12,8 +12,19 @@ type ProgressCardProps = {
 
 export function ProgressCard({ done, total, label, color }: ProgressCardProps) {
   return (
-    <Card padding={16} radiusSize="lg" style={styles.card} accessibilityLabel={`${label}: ${done} of ${total}`}>
-      <ProgressRing progress={total > 0 ? done / total : 0} size={64} strokeWidth={6} color={color} label={`${done}/${total}`} />
+    <Card
+      padding={16}
+      radiusSize="lg"
+      style={styles.card}
+      accessibilityLabel={`${label}: ${done} of ${total}`}
+    >
+      <ProgressRing
+        progress={total > 0 ? done / total : 0}
+        size={64}
+        strokeWidth={6}
+        color={color}
+        label={`${done}/${total}`}
+      />
       <Text variant="bodyLarge" color={colors.textSecondary}>
         {label}
       </Text>

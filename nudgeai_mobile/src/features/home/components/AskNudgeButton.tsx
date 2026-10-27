@@ -18,7 +18,12 @@ export function AskNudgeButton({ bottom, expanded = false }: AskNudgeButtonProps
       accessibilityRole="button"
       accessibilityLabel="Ask Nudge AI"
       onPress={() => router.push('/chat')}
-      style={({ pressed }) => [styles.base, expanded ? styles.pill : styles.round, { bottom }, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [
+        styles.base,
+        expanded ? styles.pill : styles.round,
+        { bottom },
+        pressed && { opacity: 0.85 },
+      ]}
     >
       <AiOrb size={expanded ? 48 : 40} framed={false} />
       {expanded ? <Text variant="subheading">Ask Nudge AI</Text> : null}

@@ -47,14 +47,26 @@ export function SelectField<T extends string>({
         onPress={() => setOpen((o) => !o)}
         style={[styles.field, { backgroundColor: fill }]}
       >
-        <Text variant="body" color={selected ? colors.text : colors.textPlaceholder} style={styles.value}>
+        <Text
+          variant="body"
+          color={selected ? colors.text : colors.textPlaceholder}
+          style={styles.value}
+        >
           {selected?.label ?? placeholder}
         </Text>
-        <Icon name={icon ?? (open ? 'chevron-up' : 'chevron-down')} size={20} color={colors.textSecondary} />
+        <Icon
+          name={icon ?? (open ? 'chevron-up' : 'chevron-down')}
+          size={20}
+          color={colors.textSecondary}
+        />
       </Pressable>
       {open ? (
         <View style={styles.menu}>
-          <ScrollView nestedScrollEnabled style={styles.menuScroll} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            nestedScrollEnabled
+            style={styles.menuScroll}
+            keyboardShouldPersistTaps="handled"
+          >
             {options.map((o) => (
               <Pressable
                 key={o.value}
@@ -77,7 +89,13 @@ export function SelectField<T extends string>({
 
 const styles = StyleSheet.create({
   label: { marginBottom: 10 },
-  field: { height: 48, borderRadius: radius.md, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center' },
+  field: {
+    height: 48,
+    borderRadius: radius.md,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   value: { flex: 1 },
   menu: {
     marginTop: 6,

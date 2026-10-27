@@ -61,22 +61,40 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
   };
 
   const triggerOptions = habits.map((h) => ({ label: h.name, value: h.id }));
-  const triggerName = habits.find((h) => h.id === (trigger ?? habits[0]?.id))?.name ?? 'your trigger habit';
+  const triggerName =
+    habits.find((h) => h.id === (trigger ?? habits[0]?.id))?.name ?? 'your trigger habit';
 
   return (
     <BottomSheet
       visible={visible}
       title="Create New Habit"
       onClose={close}
-      footer={<Button label="Create habit" onPress={submit} disabled={!canSubmit} testID="create-habit-submit" />}
+      footer={
+        <Button
+          label="Create habit"
+          onPress={submit}
+          disabled={!canSubmit}
+          testID="create-habit-submit"
+        />
+      }
     >
-      <TextField appearance="filled" label="Habit Name" placeholder="e.g. morning workout" value={name} onChangeText={setName} />
+      <TextField
+        appearance="filled"
+        label="Habit Name"
+        placeholder="e.g. morning workout"
+        value={name}
+        onChangeText={setName}
+      />
 
       <View style={styles.group}>
         <Text variant="subheading" color={colors.textSecondary}>
           Choose Icon
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.icons}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.icons}
+        >
           {HABIT_ICONS.map((icon) => (
             <Pressable
               key={icon}
@@ -128,7 +146,12 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
         </View>
       </View>
 
-      <SelectField label="Frequency" value={frequency} options={FREQUENCY_OPTIONS} onChange={setFrequency} />
+      <SelectField
+        label="Frequency"
+        value={frequency}
+        options={FREQUENCY_OPTIONS}
+        onChange={setFrequency}
+      />
 
       {canStack ? (
         <View style={styles.stackCard}>
@@ -164,15 +187,34 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
 const styles = StyleSheet.create({
   group: { gap: 12 },
   icons: { gap: 12, paddingRight: 8 },
-  icon: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.fill, alignItems: 'center', justifyContent: 'center' },
+  icon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.fill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconText: { fontSize: 26 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   gridChip: { height: 46, borderRadius: radius.md, minWidth: '30%', flexGrow: 1 },
   row: { flexDirection: 'row', gap: 12 },
   rowChip: { flex: 1, height: 46, borderRadius: radius.md, paddingHorizontal: 8 },
   chipEmoji: { fontSize: 16 },
-  stackCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.borderSoft, padding: 18, gap: 16 },
+  stackCard: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: 18,
+    gap: 16,
+  },
   stackHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   stackTexts: { flex: 1, gap: 2 },
-  stackBody: { gap: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 16 },
+  stackBody: {
+    gap: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: 16,
+  },
 });

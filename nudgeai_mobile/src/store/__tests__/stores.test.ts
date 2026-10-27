@@ -29,9 +29,15 @@ describe('useHabitsStore', () => {
     const { addHabit, toggleHabit } = useHabitsStore.getState();
     const { id } = addHabit(draft);
     toggleHabit(id);
-    expect(useHabitsStore.getState().habits[0]).toMatchObject({ completedToday: true, daysDone: 1 });
+    expect(useHabitsStore.getState().habits[0]).toMatchObject({
+      completedToday: true,
+      daysDone: 1,
+    });
     toggleHabit(id);
-    expect(useHabitsStore.getState().habits[0]).toMatchObject({ completedToday: false, daysDone: 0 });
+    expect(useHabitsStore.getState().habits[0]).toMatchObject({
+      completedToday: false,
+      daysDone: 0,
+    });
     toggleHabit(id);
     toggleHabit(id);
     expect(useHabitsStore.getState().habits[0].daysDone).toBe(0);
@@ -49,8 +55,20 @@ describe('useHabitsStore', () => {
 describe('useTasksStore', () => {
   it('adds a task one hour long and completes it', () => {
     const { addTask, toggleTask } = useTasksStore.getState();
-    const task = addTask({ title: ' Plan sprint ', date: '', time: '14:30', priority: 'High', notes: '', repeat: false });
-    expect(task).toMatchObject({ title: 'Plan sprint', startTime: '2:30 pm', endTime: '3:30 pm', done: false });
+    const task = addTask({
+      title: ' Plan sprint ',
+      date: '',
+      time: '14:30',
+      priority: 'High',
+      notes: '',
+      repeat: false,
+    });
+    expect(task).toMatchObject({
+      title: 'Plan sprint',
+      startTime: '2:30 pm',
+      endTime: '3:30 pm',
+      done: false,
+    });
     toggleTask(task.id);
     expect(useTasksStore.getState().tasks[0].done).toBe(true);
   });

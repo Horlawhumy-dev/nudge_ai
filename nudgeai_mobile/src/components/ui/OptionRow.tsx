@@ -16,7 +16,14 @@ type OptionRowProps = {
   shape?: 'pill' | 'card';
 };
 
-export function OptionRow({ title, description, leading, selected, onPress, shape = 'pill' }: OptionRowProps) {
+export function OptionRow({
+  title,
+  description,
+  leading,
+  selected,
+  onPress,
+  shape = 'pill',
+}: OptionRowProps) {
   return (
     <Pressable
       accessibilityRole="radio"
@@ -44,7 +51,12 @@ export function OptionRow({ title, description, leading, selected, onPress, shap
 }
 
 const styles = StyleSheet.create({
-  base: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.borderSoft },
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+  },
   pill: { height: 56, borderRadius: radius.pill, paddingHorizontal: 20 },
   card: { minHeight: 84, borderRadius: radius.md, paddingHorizontal: 20, paddingVertical: 14 },
   leading: { width: 36, alignItems: 'flex-start', justifyContent: 'center' },

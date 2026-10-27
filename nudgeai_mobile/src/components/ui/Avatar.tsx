@@ -7,5 +7,11 @@ type AvatarProps = {
 };
 
 export function Avatar({ source = require('@/assets/images/avatar.png'), size = 48 }: AvatarProps) {
-  return <Image source={source} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />;
+  return (
+    <Image
+      source={source}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      contentFit="cover"
+    />
+  );
 }

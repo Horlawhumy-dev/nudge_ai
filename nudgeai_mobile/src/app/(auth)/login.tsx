@@ -60,11 +60,25 @@ export default function Login() {
           textContentType="password"
           onSubmitEditing={submit}
         />
-        <LinkText action="Forget password" align="right" onPress={() => router.push('/forgot-password')} />
+        <LinkText
+          action="Forget password"
+          align="right"
+          onPress={() => router.push('/forgot-password')}
+        />
       </View>
-      <Button label="Log in" onPress={submit} loading={loading} style={styles.cta} testID="login-submit" />
+      <Button
+        label="Log in"
+        onPress={submit}
+        loading={loading}
+        style={styles.cta}
+        testID="login-submit"
+      />
       <View style={styles.switch}>
-        <LinkText prefix="Don’t have an account?" action="Create account" onPress={() => router.replace('/signup')} />
+        <LinkText
+          prefix="Don’t have an account?"
+          action="Create account"
+          onPress={() => router.replace('/signup')}
+        />
       </View>
       <View style={styles.or}>
         <OrDivider />

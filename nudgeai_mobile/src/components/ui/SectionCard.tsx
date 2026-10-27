@@ -26,6 +26,12 @@ export function SectionCard({ title, children, gap = 10 }: SectionCardProps) {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.borderSoft, padding: 16 },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: 16,
+  },
   title: { marginBottom: 12, marginLeft: 4 },
 });

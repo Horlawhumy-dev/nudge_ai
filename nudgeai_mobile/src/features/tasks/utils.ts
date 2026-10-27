@@ -20,9 +20,10 @@ const SECTION_ORDER: readonly { status: TaskStatus; title: string }[] = [
 
 /** Groups tasks into the Overdue / Completed / Upcoming sections, dropping empty ones. */
 export function groupTasks(tasks: readonly Task[]): TaskSection[] {
-  return SECTION_ORDER.map((s) => ({ ...s, tasks: tasks.filter((t) => taskStatus(t) === s.status) })).filter(
-    (s) => s.tasks.length > 0
-  );
+  return SECTION_ORDER.map((s) => ({
+    ...s,
+    tasks: tasks.filter((t) => taskStatus(t) === s.status),
+  })).filter((s) => s.tasks.length > 0);
 }
 
 export function doneCount(tasks: readonly Task[]): number {

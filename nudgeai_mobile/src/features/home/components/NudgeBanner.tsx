@@ -29,7 +29,13 @@ export function NudgeBanner({ message }: NudgeBannerProps) {
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 24, paddingHorizontal: 20 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
   texts: { flex: 1, gap: 6, paddingRight: 28 },
   title: { fontFamily: fonts.bodyMedium, fontSize: 20, color: colors.text },
   sparkles: { position: 'absolute', right: 18, top: 18, alignItems: 'center', gap: 14 },

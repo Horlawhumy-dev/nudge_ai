@@ -45,8 +45,16 @@ export function Screen({
   ];
 
   return (
-    <View style={[styles.root, { backgroundColor: background, paddingTop: edgeToEdge ? 0 : insets.top + 8 }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: background, paddingTop: edgeToEdge ? 0 : insets.top + 8 },
+      ]}
+    >
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         {scroll ? (
           <ScrollView
             style={styles.flex}
@@ -60,7 +68,9 @@ export function Screen({
           <View style={[styles.flex, padded]}>{children}</View>
         )}
         {footer ? (
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>{footer}</View>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            {footer}
+          </View>
         ) : null}
       </KeyboardAvoidingView>
       {overlay}

@@ -11,7 +11,10 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View pointerEvents="box-none" style={[styles.host, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.host, { paddingBottom: Math.max(insets.bottom, 12) }]}
+    >
       <View style={styles.bar}>
         {state.routes.map((route, index) => {
           const item = TAB_ITEMS[route.name as TabName];
@@ -20,7 +23,11 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           const tint = focused ? colors.primary : colors.textSecondary;
 
           const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
           };
 
@@ -58,6 +65,13 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     ...shadows.card,
   },
-  tab: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: 28 },
+  tab: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    borderRadius: 28,
+  },
   tabActive: { backgroundColor: colors.primarySoft },
 });

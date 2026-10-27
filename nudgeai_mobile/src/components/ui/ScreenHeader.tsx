@@ -15,7 +15,13 @@ type ScreenHeaderProps = {
   onBack?: () => void;
 };
 
-export function ScreenHeader({ title, subtitle, showBack = true, right, onBack }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  showBack = true,
+  right,
+  onBack,
+}: ScreenHeaderProps) {
   return (
     <View style={styles.row}>
       {showBack ? <BackButton onPress={onBack} /> : null}
@@ -24,7 +30,7 @@ export function ScreenHeader({ title, subtitle, showBack = true, right, onBack }
           {title}
         </Text>
         {subtitle ? (
-          <Text variant="bodyLarge" color={colors.textSecondary}>
+          <Text variant="body" color={colors.textSecondary}>
             {subtitle}
           </Text>
         ) : null}
@@ -35,7 +41,7 @@ export function ScreenHeader({ title, subtitle, showBack = true, right, onBack }
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
   titles: { flex: 1 },
   title: { fontSize: 24 },
 });

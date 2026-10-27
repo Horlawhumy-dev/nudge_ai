@@ -17,8 +17,20 @@ type ChipProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-export function Chip({ label, selected = false, onPress, leading, size = 'md', tone = 'white', style }: ChipProps) {
-  const background = selected ? colors.primaryTint : tone === 'white' ? colors.surface : colors.fill;
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+  leading,
+  size = 'md',
+  tone = 'white',
+  style,
+}: ChipProps) {
+  const background = selected
+    ? colors.primaryTint
+    : tone === 'white'
+      ? colors.surface
+      : colors.fill;
   const body = (
     <View
       style={[
@@ -45,7 +57,13 @@ export function Chip({ label, selected = false, onPress, leading, size = 'md', t
 }
 
 const styles = StyleSheet.create({
-  base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.pill },
+  base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: radius.pill,
+  },
   md: { height: 42, paddingHorizontal: 20 },
   tag: { height: 30, paddingHorizontal: 12 },
   outlined: { borderWidth: 1, borderColor: colors.borderSoft },

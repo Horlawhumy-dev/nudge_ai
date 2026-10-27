@@ -19,7 +19,12 @@ export function ListSection({ title, onAdd, addLabel, children }: ListSectionPro
         <Text variant="subheading" color={colors.textSecondary}>
           {title}
         </Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={addLabel} onPress={onAdd} style={styles.add}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={addLabel}
+          onPress={onAdd}
+          style={styles.add}
+        >
           <Icon name="add" size={26} color={colors.white} />
         </Pressable>
       </View>
@@ -29,8 +34,29 @@ export function ListSection({ title, onAdd, addLabel, children }: ListSectionPro
 }
 
 const styles = StyleSheet.create({
-  panel: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 14, borderWidth: 1, borderColor: colors.borderSoft },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingVertical: 4, marginBottom: 10 },
-  add: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.glow },
+  panel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+  },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  add: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.glow,
+  },
   body: { gap: 12 },
 });

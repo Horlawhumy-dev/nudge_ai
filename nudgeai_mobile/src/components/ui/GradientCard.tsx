@@ -6,16 +6,28 @@ import { gradients, radius } from '@/theme';
 
 type GradientCardProps = {
   children: ReactNode;
+  /** `banner` fades in from a light lavender edge (icon first); `card` is a deeper purple throughout. */
+  variant?: 'banner' | 'card';
   style?: StyleProp<ViewStyle>;
 };
 
-/** Purple "Nudge AI" surface used by the home banner, insights and the Pro upsell. */
-export function GradientCard({ children, style }: GradientCardProps) {
-  return (
+/** Purple "Nudge AI" surface used by the home banner, insights, voice preview and the Pro upsell. */
+export function GradientCard({ children, variant = 'banner', style }: GradientCardProps) {
+  return variant === 'banner' ? (
     <LinearGradient
-      colors={gradients.ai}
-      start={gradients.aiStart}
-      end={gradients.aiEnd}
+      colors={gradients.banner}
+      locations={gradients.bannerLocations}
+      start={gradients.start}
+      end={gradients.end}
+      style={[styles.card, style]}
+    >
+      {children}
+    </LinearGradient>
+  ) : (
+    <LinearGradient
+      colors={gradients.card}
+      start={gradients.start}
+      end={gradients.end}
       style={[styles.card, style]}
     >
       {children}

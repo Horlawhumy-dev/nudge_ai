@@ -15,7 +15,14 @@ export const seedConversations: ConversationSummary[] = [
     mode: 'Voice + text',
     group: 'Today',
   },
-  { id: 'c2', title: 'My day summary', time: '12:00 pm', messageCount: 1, mode: 'Text', group: 'Today' },
+  {
+    id: 'c2',
+    title: 'My day summary',
+    time: '12:00 pm',
+    messageCount: 1,
+    mode: 'Text',
+    group: 'Today',
+  },
   {
     id: 'c3',
     title: 'Suggest habits for better sleep at night or napping during the day',

@@ -10,7 +10,8 @@ type ConfirmDialogProps = {
   title: string;
   message?: string;
   confirmLabel: string;
-  cancelLabel?: string;
+  /** Pass `null` for a single-button notice. */
+  cancelLabel?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -25,7 +26,13 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable style={styles.card} onPress={() => undefined} accessibilityViewIsModal>
           <Text variant="heading" align="center" style={styles.title}>
@@ -37,7 +44,14 @@ export function ConfirmDialog({
             </Text>
           ) : null}
           <View style={styles.actions}>
-            <Button label={cancelLabel} variant="secondary" onPress={onCancel} style={styles.action} />
+            {cancelLabel === null ? null : (
+              <Button
+                label={cancelLabel}
+                variant="secondary"
+                onPress={onCancel}
+                style={styles.action}
+              />
+            )}
             <Button label={confirmLabel} onPress={onConfirm} style={styles.action} />
           </View>
         </Pressable>
@@ -47,9 +61,21 @@ export function ConfirmDialog({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { width: '100%', backgroundColor: colors.surface, borderRadius: radius.xl, padding: 24, gap: 12 },
-  title: { marginBottom: 4 },
+  backdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 24,
+    gap: 12,
+  },
+  title: { marginBottom: 4, paddingHorizontal: 12 },
   actions: { flexDirection: 'row', gap: 14, marginTop: 14 },
   action: { flex: 1 },
 });

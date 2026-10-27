@@ -40,7 +40,9 @@ export default function Tasks() {
       background={colors.background}
       bottomInset={clearance + 40}
       contentStyle={styles.content}
-      overlay={<Fab accessibilityLabel="Add task" onPress={() => setSheet(true)} bottom={clearance - 8} />}
+      overlay={
+        <Fab accessibilityLabel="Add task" onPress={() => setSheet(true)} bottom={clearance - 8} />
+      }
     >
       <ScreenHeader
         title="My Tasks"

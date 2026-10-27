@@ -2,7 +2,14 @@ import type { HabitFrequency, TimeOfDay } from './types';
 
 export const HABIT_ICONS = ['💪', '🍎', '📚', '💧', '🧠', '✍️', '🎯', '😴', '🧘', '💼'] as const;
 
-export const HABIT_CATEGORIES = ['Fitness', 'Learning', 'Productivity', 'Health', 'Mindfulness', 'Hydration'] as const;
+export const HABIT_CATEGORIES = [
+  'Fitness',
+  'Learning',
+  'Productivity',
+  'Health',
+  'Mindfulness',
+  'Hydration',
+] as const;
 
 export const TIMES_OF_DAY: readonly { value: TimeOfDay; emoji: string }[] = [
   { value: 'Morning', emoji: '🌅' },

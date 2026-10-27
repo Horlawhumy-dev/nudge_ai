@@ -14,8 +14,8 @@ import { ProgressCard } from '@/features/home/components/ProgressCard';
 import { NewTaskSheet } from '@/features/tasks/components/NewTaskSheet';
 import { TaskRow } from '@/features/tasks/components/TaskRow';
 import { doneCount } from '@/features/tasks/utils';
-import { firstName, greeting } from '@/lib/format';
-import { useAuthStore } from '@/store/useAuthStore';
+import { greeting } from '@/lib/format';
+import { displayName, useAuthStore } from '@/store/useAuthStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors } from '@/theme';
@@ -24,7 +24,7 @@ const UNREAD_NUDGES = 3;
 
 export default function Home() {
   const clearance = useTabBarClearance();
-  const name = useAuthStore((s) => firstName(s.user?.name ?? ''));
+  const name = useAuthStore((s) => displayName(s.user));
   const habits = useHabitsStore((s) => s.habits);
   const streak = useHabitsStore((s) => s.streak);
   const tasks = useTasksStore((s) => s.tasks);
@@ -66,11 +66,25 @@ export default function Home() {
           <View style={styles.progress}>
             <Text variant="subheading">Today’s progress</Text>
             <View style={styles.cards}>
-              <ProgressCard done={completedCount(habits)} total={habits.length} label="Habits done" color={colors.accents[0]} />
-              <ProgressCard done={doneCount(tasks)} total={tasks.length} label="Tasks done" color={colors.accents[1]} />
+              <ProgressCard
+                done={completedCount(habits)}
+                total={habits.length}
+                label="Habits done"
+                color={colors.accents[0]}
+              />
+              <ProgressCard
+                done={doneCount(tasks)}
+                total={tasks.length}
+                label="Tasks done"
+                color={colors.accents[1]}
+              />
             </View>
           </View>
-          <ListSection title="Today’s Habits" addLabel="Add habit" onAdd={() => setHabitSheet(true)}>
+          <ListSection
+            title="Today’s Habits"
+            addLabel="Add habit"
+            onAdd={() => setHabitSheet(true)}
+          >
             {habits.length > 0 ? (
               <HabitList habits={habits} />
             ) : (
@@ -79,7 +93,9 @@ export default function Home() {
           </ListSection>
           <ListSection title="To-do list" addLabel="Add task" onAdd={() => setTaskSheet(true)}>
             {orderedTasks.length > 0 ? (
-              orderedTasks.map((task) => <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} />)
+              orderedTasks.map((task) => (
+                <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} />
+              ))
             ) : (
               <Button label="Add a task" variant="outline" onPress={() => setTaskSheet(true)} />
             )}

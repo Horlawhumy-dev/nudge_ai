@@ -12,7 +12,6 @@ export const fonts = {
 
 export type FontFamily = (typeof fonts)[keyof typeof fonts];
 
-/* eslint-disable @typescript-eslint/no-require-imports -- Metro needs static require() for assets */
 export const fontAssets: Record<FontFamily, number> = {
   [fonts.display]: require('@expo-google-fonts/playfair-display/600SemiBold/PlayfairDisplay_600SemiBold.ttf'),
   [fonts.displayBold]: require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
@@ -20,4 +19,3 @@ export const fontAssets: Record<FontFamily, number> = {
   [fonts.bodyMedium]: require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
   [fonts.bodySemiBold]: require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
 };
-/* eslint-enable @typescript-eslint/no-require-imports */

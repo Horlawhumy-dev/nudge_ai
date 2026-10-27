@@ -62,7 +62,9 @@ export function NewTaskSheet({ visible, onClose }: NewTaskSheetProps) {
       visible={visible}
       title="New Task"
       onClose={close}
-      footer={<Button label="Add task" onPress={submit} disabled={!canSubmit} testID="add-task-submit" />}
+      footer={
+        <Button label="Add task" onPress={submit} disabled={!canSubmit} testID="add-task-submit" />
+      }
     >
       <TextField
         appearance="filled"
@@ -81,7 +83,13 @@ export function NewTaskSheet({ visible, onClose }: NewTaskSheetProps) {
         trailing={<Icon name="calendar-outline" size={22} color={colors.textSecondary} />}
       />
       <View style={styles.timeGroup}>
-        <SelectField label="Time" value={time} options={TIME_OPTIONS} onChange={setTime} icon="time-outline" />
+        <SelectField
+          label="Time"
+          value={time}
+          options={TIME_OPTIONS}
+          onChange={setTime}
+          icon="time-outline"
+        />
         <Text variant="bodyLarge" color={colors.primary}>
           Nudge AI will remind you.
         </Text>

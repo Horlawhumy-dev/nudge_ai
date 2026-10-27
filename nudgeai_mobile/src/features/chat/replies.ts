@@ -1,15 +1,17 @@
-import { firstName } from '@/lib/format';
-
 /**
  * Scripted replies standing in for the backend chat endpoint. Matches the conversations in
  * the design; anything else gets a generic acknowledgement. Swap for the API call later.
  */
-export function replyTo(input: string, fullName: string, counts: { habits: number; tasks: number }): string {
+export function replyTo(
+  input: string,
+  name: string,
+  counts: { habits: number; tasks: number }
+): string {
   const text = input.toLowerCase();
-  const name = firstName(fullName) || 'there';
+  const who = name || 'there';
 
   if (text.includes('summary')) {
-    return `Good morning ${name}! You have ${counts.habits} habits and ${counts.tasks} tasks today. Your deep work session is coming up at 10 am. Want me to clear your morning first?`;
+    return `Good morning ${who}! You have ${counts.habits} habits and ${counts.tasks} tasks today. Your deep work session is coming up at 10 am. Want me to clear your morning first?`;
   }
   if (text.includes('push') || text.includes('reschedule')) {
     return 'Done! Deep work rescheduled to 11:00 am. I’ll remind you at 10:00 am so you can wind down first.';

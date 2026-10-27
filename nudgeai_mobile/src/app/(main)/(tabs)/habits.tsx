@@ -28,7 +28,13 @@ export default function Habits() {
       background={colors.background}
       bottomInset={clearance + 40}
       contentStyle={styles.content}
-      overlay={<Fab accessibilityLabel="Create habit" onPress={() => setSheet(true)} bottom={clearance - 8} />}
+      overlay={
+        <Fab
+          accessibilityLabel="Create habit"
+          onPress={() => setSheet(true)}
+          bottom={clearance - 8}
+        />
+      }
     >
       <ScreenHeader
         title="My Habits"

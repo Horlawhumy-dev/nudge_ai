@@ -42,7 +42,9 @@ export const useTasksStore = create<TasksState>((set) => ({
 
   toggleTask: (id) =>
     set((s) => ({
-      tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done, overdue: t.done ? t.overdue : false } : t)),
+      tasks: s.tasks.map((t) =>
+        t.id === id ? { ...t, done: !t.done, overdue: t.done ? t.overdue : false } : t
+      ),
     })),
 
   removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),

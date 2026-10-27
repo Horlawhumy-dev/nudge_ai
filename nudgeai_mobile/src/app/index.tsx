@@ -25,12 +25,22 @@ export default function Splash() {
 
   return (
     <View style={styles.root}>
-      <Image source={require('@/assets/images/logo.png')} style={styles.logo} contentFit="contain" accessibilityLabel="Nudge" />
+      <Image
+        source={require('@/assets/images/logo.png')}
+        style={styles.logo}
+        contentFit="contain"
+        accessibilityLabel="Nudge"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.backgroundAuth, alignItems: 'center', justifyContent: 'center' },
+  root: {
+    flex: 1,
+    backgroundColor: colors.backgroundAuth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logo: { width: 172, height: 74 },
 });

@@ -49,9 +49,12 @@ export const colors = {
 } as const;
 
 export const gradients = {
-  /** Nudge AI banner and Pro upsell card. */
-  ai: ['#EDD2FF', '#C15EFF'] as const,
-  aiStart: { x: 0, y: 0.5 },
-  aiEnd: { x: 0.65, y: 0.5 },
+  /** Light lavender under the orb fading to full purple; for banners that start with an icon. */
+  banner: ['#EDD2FF', '#C15EFF', '#B650FA'] as const,
+  bannerLocations: [0, 0.34, 1] as const,
+  /** Deeper fill for cards whose text starts at the left edge (e.g. "Preview your Nudge"). */
+  card: ['#D08CFF', '#B650FA'] as const,
+  start: { x: 0, y: 0.5 },
+  end: { x: 1, y: 0.5 },
   voiceDock: ['rgba(237,208,255,0)', '#EDD0FF'] as const,
 };

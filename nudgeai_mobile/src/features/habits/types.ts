@@ -18,4 +18,7 @@ export type Habit = {
   stackedAfter?: string;
 };
 
-export type HabitDraft = Pick<Habit, 'name' | 'emoji' | 'category' | 'timeOfDay' | 'frequency' | 'stackedAfter'>;
+export type HabitDraft = Pick<
+  Habit,
+  'name' | 'emoji' | 'category' | 'timeOfDay' | 'frequency' | 'stackedAfter'
+>;

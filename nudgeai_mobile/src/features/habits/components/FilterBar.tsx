@@ -20,7 +20,13 @@ export function FilterBar<T extends string>({ filters, value, onChange }: Filter
       accessibilityRole="tablist"
     >
       {filters.map((f) => (
-        <Chip key={f} label={f} selected={f === value} onPress={() => onChange(f)} style={styles.chip} />
+        <Chip
+          key={f}
+          label={f}
+          selected={f === value}
+          onPress={() => onChange(f)}
+          style={styles.chip}
+        />
       ))}
     </ScrollView>
   );

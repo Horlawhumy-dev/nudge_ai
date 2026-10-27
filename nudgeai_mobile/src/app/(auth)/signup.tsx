@@ -67,16 +67,31 @@ export default function SignUp() {
           value={password}
           onChangeText={setPassword}
           onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-          error={touched.password && password && !passwordValid ? 'Min 8 characters, 1 special character, caps, number.' : undefined}
+          error={
+            touched.password && password && !passwordValid
+              ? 'Min 8 characters, 1 special character, caps, number.'
+              : undefined
+          }
           secure
           autoCapitalize="none"
           autoComplete="new-password"
           textContentType="newPassword"
         />
       </View>
-      <Button label="Create account" onPress={submit} disabled={!canSubmit} loading={loading} style={styles.cta} testID="signup-submit" />
+      <Button
+        label="Create account"
+        onPress={submit}
+        disabled={!canSubmit}
+        loading={loading}
+        style={styles.cta}
+        testID="signup-submit"
+      />
       <View style={styles.switch}>
-        <LinkText prefix="Already have an account?" action="Log in" onPress={() => router.replace('/login')} />
+        <LinkText
+          prefix="Already have an account?"
+          action="Log in"
+          onPress={() => router.replace('/login')}
+        />
       </View>
       <View style={styles.or}>
         <OrDivider />

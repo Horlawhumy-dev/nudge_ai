@@ -1,4 +1,8 @@
-const WEEKDAY_MONTH_DAY: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric' };
+const WEEKDAY_MONTH_DAY: Intl.DateTimeFormatOptions = {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+};
 
 /** "Monday, May 10" */
 export function formatLongDate(date: Date = new Date()): string {
@@ -8,7 +12,8 @@ export function formatLongDate(date: Date = new Date()): string {
 /** "Today, 13th May 2026" */
 export function formatOrdinalDate(date: Date = new Date()): string {
   const day = date.getDate();
-  const suffix = day % 100 >= 11 && day % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][day % 10] ?? 'th');
+  const suffix =
+    day % 100 >= 11 && day % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][day % 10] ?? 'th');
   const month = date.toLocaleDateString('en-US', { month: 'long' });
   return `${day}${suffix} ${month} ${date.getFullYear()}`;
 }

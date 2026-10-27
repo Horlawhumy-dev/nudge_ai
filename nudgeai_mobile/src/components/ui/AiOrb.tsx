@@ -14,7 +14,11 @@ export function AiOrb({ size = 48, framed = false }: AiOrbProps) {
     const inner = size * 0.72;
     return (
       <View style={[styles.frame, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={require('@/assets/images/ai-orb.png')} style={{ width: inner, height: inner }} contentFit="contain" />
+        <Image
+          source={require('@/assets/images/ai-orb.png')}
+          style={{ width: inner, height: inner }}
+          contentFit="contain"
+        />
       </View>
     );
   }

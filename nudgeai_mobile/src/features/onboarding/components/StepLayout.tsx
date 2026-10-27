@@ -30,10 +30,19 @@ export function StepLayout({
   return (
     <Screen
       scroll
-      footer={<Button label={actionLabel} onPress={onContinue} disabled={!canContinue} testID="step-continue" />}
+      footer={
+        <Button
+          label={actionLabel}
+          onPress={onContinue}
+          disabled={!canContinue}
+          testID="step-continue"
+        />
+      }
     >
       <View style={styles.top}>
-        <BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/signup'))} />
+        <BackButton
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/signup'))}
+        />
         <StepIndicator step={step} total={ONBOARDING_STEPS} />
       </View>
       <View style={styles.heading}>

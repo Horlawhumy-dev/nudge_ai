@@ -29,7 +29,12 @@ export function HabitCard({ habit, onToggle, onMenu }: HabitCardProps) {
         <Text variant="subheading" style={styles.name} numberOfLines={1}>
           {habit.name}
         </Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${habit.name}`} hitSlop={12} onPress={onMenu}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Options for ${habit.name}`}
+          hitSlop={12}
+          onPress={onMenu}
+        >
           <Icon name="ellipsis-vertical" size={20} color={colors.textSecondary} />
         </Pressable>
       </View>

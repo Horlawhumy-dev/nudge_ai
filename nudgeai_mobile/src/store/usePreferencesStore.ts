@@ -28,7 +28,9 @@ type PreferencesState = {
   quietHours: QuietHours;
   plan: Plan;
 
-  set: (patch: Partial<Omit<PreferencesState, 'set' | 'setNotification' | 'setQuietHours' | 'reset'>>) => void;
+  set: (
+    patch: Partial<Omit<PreferencesState, 'set' | 'setNotification' | 'setQuietHours' | 'reset'>>
+  ) => void;
   setNotification: (key: NotificationKey, value: boolean) => void;
   setQuietHours: (patch: Partial<QuietHours>) => void;
   reset: () => void;
@@ -43,7 +45,13 @@ const initial = {
   sleepTime: '1030-12',
   goals: [] as string[],
   habitStacking: true,
-  notifications: { push: true, voice: true, morningSummary: true, weeklyReport: false, streakAlerts: true },
+  notifications: {
+    push: true,
+    voice: true,
+    morningSummary: true,
+    weeklyReport: false,
+    streakAlerts: true,
+  },
   quietHours: {
     enabled: true,
     from: '10:00 PM',
@@ -58,7 +66,8 @@ const initial = {
 export const usePreferencesStore = create<PreferencesState>((set) => ({
   ...initial,
   set: (patch) => set(patch),
-  setNotification: (key, value) => set((s) => ({ notifications: { ...s.notifications, [key]: value } })),
+  setNotification: (key, value) =>
+    set((s) => ({ notifications: { ...s.notifications, [key]: value } })),
   setQuietHours: (patch) => set((s) => ({ quietHours: { ...s.quietHours, ...patch } })),
   reset: () => set(initial),
 }));

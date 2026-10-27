@@ -15,7 +15,12 @@ type SuccessScreenProps = {
 export function SuccessScreen({ title, message, actionLabel, onAction }: SuccessScreenProps) {
   return (
     <Screen edgeToEdge>
-      <Image source={require('@/assets/images/confetti.png')} style={styles.confetti} contentFit="cover" contentPosition="top" />
+      <Image
+        source={require('@/assets/images/confetti.png')}
+        style={styles.confetti}
+        contentFit="cover"
+        contentPosition="top"
+      />
       <View style={styles.body}>
         <Text variant="title" align="center" style={styles.title}>
           {title}

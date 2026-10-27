@@ -55,7 +55,13 @@ export default function NewPassword() {
           hint="Min 8 characters, 1 special character, caps, number."
         />
       </View>
-      <Button label="Reset password" onPress={submit} disabled={!canSubmit} loading={loading} style={styles.cta} />
+      <Button
+        label="Reset password"
+        onPress={submit}
+        disabled={!canSubmit}
+        loading={loading}
+        style={styles.cta}
+      />
     </Screen>
   );
 }

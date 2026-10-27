@@ -9,5 +9,10 @@ export type TextProps = RNTextProps & {
 };
 
 export function Text({ variant = 'body', color = colors.text, align, style, ...rest }: TextProps) {
-  return <RNText {...rest} style={[typography[variant], { color }, align && { textAlign: align }, style]} />;
+  return (
+    <RNText
+      {...rest}
+      style={[typography[variant], { color }, align && { textAlign: align }, style]}
+    />
+  );
 }

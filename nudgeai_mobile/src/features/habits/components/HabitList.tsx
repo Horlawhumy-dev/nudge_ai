@@ -22,7 +22,12 @@ export function HabitList({ habits }: HabitListProps) {
     <>
       <View style={styles.list}>
         {habits.map((habit) => (
-          <HabitCard key={habit.id} habit={habit} onToggle={() => toggleHabit(habit.id)} onMenu={() => setPending(habit)} />
+          <HabitCard
+            key={habit.id}
+            habit={habit}
+            onToggle={() => toggleHabit(habit.id)}
+            onMenu={() => setPending(habit)}
+          />
         ))}
       </View>
       <ConfirmDialog

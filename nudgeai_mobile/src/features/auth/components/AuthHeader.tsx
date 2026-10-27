@@ -20,6 +20,6 @@ export function AuthHeader({ title, subtitle }: AuthHeaderProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 24, marginBottom: 36 },
+  wrap: { marginTop: 40, marginBottom: 36 },
   subtitle: { marginTop: 6 },
 });

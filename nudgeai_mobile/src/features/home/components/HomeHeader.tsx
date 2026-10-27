@@ -15,7 +15,11 @@ export function HomeHeader({ greeting, streak, unread }: HomeHeaderProps) {
 
   return (
     <View style={styles.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.navigate('/profile')}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open profile"
+        onPress={() => router.navigate('/profile')}
+      >
         <Avatar size={48} />
       </Pressable>
       <View style={styles.texts}>

@@ -17,7 +17,10 @@ export function StepIndicator({ step, total }: StepIndicatorProps) {
       </Text>
       <View style={styles.row}>
         {Array.from({ length: total }, (_, i) => (
-          <View key={i} style={[styles.segment, i + 1 === step && { backgroundColor: colors.primary }]} />
+          <View
+            key={i}
+            style={[styles.segment, i + 1 === step && { backgroundColor: colors.primary }]}
+          />
         ))}
       </View>
     </View>

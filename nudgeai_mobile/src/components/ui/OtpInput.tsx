@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { colors, fonts, radius } from '@/theme';
 
@@ -28,10 +28,16 @@ export function OtpInput({ length = 4, value, onChange, autoFocus = true }: OtpI
               key={i}
               style={[
                 styles.cell,
-                isActive && { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+                value[i] !== undefined && { borderColor: colors.primaryTint },
+                isActive && {
+                  borderColor: colors.primaryTint,
+                  backgroundColor: colors.primarySoft,
+                },
               ]}
             >
-              <Text variant="heading">{value[i] ?? ''}</Text>
+              <Text variant="title" color={colors.primary} style={styles.digit}>
+                {value[i] ?? (isActive ? '|' : '')}
+              </Text>
             </View>
           );
         })}
@@ -65,5 +71,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hidden: { position: 'absolute', opacity: 0, width: 1, height: 1, fontFamily: fonts.body },
+  digit: { fontFamily: fonts.body, fontSize: 24, lineHeight: 30 },
+  hidden: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+    fontFamily: fonts.body,
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
+  },
 });

@@ -1,22 +1,32 @@
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 
 import { Icon, Text, Waveform } from '@/components/ui';
 import { colors, radius } from '@/theme';
 
-const WAVE = [0.3, 0.6, 0.9, 0.5, 0.75, 1, 0.55, 0.8, 0.4, 0.95, 0.6, 0.85, 0.45, 0.7, 0.35, 0.9, 0.5, 0.65, 0.3, 0.8];
+const WAVE = [
+  0.3, 0.6, 0.9, 0.5, 0.75, 1, 0.55, 0.8, 0.4, 0.95, 0.6, 0.85, 0.45, 0.7, 0.35, 0.9, 0.5, 0.65,
+  0.3, 0.8,
+];
 
 /** Slide 1: a phone mock-up showing a spoken alarm. Bleeds off the bottom edge. */
-export function AlarmArt() {
+export function AlarmArt({ background }: { background: string }) {
   return (
     <View style={styles.alarmWrap}>
-      <Image
-        source={require('@/assets/images/onboarding-alarm.png')}
-        style={styles.alarm}
-        contentFit="contain"
-        contentPosition="top"
-        accessibilityLabel="A phone showing a spoken reminder: Go for a run, 6:30"
-      />
+      <View style={styles.alarm}>
+        <Image
+          source={require('@/assets/images/onboarding-alarm.png')}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          accessibilityLabel="A phone showing a spoken reminder: Go for a run, 6:30"
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={[`${background}00`, background]}
+          style={styles.alarmFade}
+        />
+      </View>
     </View>
   );
 }
@@ -26,7 +36,11 @@ export function RhythmArt() {
   return (
     <View style={styles.rhythm}>
       <View style={[styles.bubble, styles.bubbleOne]}>
-        <Image source={require('@/assets/images/memoji.png')} style={styles.memoji} contentFit="cover" />
+        <Image
+          source={require('@/assets/images/memoji.png')}
+          style={styles.memoji}
+          contentFit="cover"
+        />
         <Text variant="bodyLarge" color={colors.textSecondary} style={styles.bubbleText}>
           Hey Rophy! Your deep work session starts in 10 mins. Ready?
         </Text>
@@ -60,7 +74,11 @@ export function RhythmArt() {
 export function StreakArt() {
   return (
     <View style={styles.streak}>
-      <Image source={require('@/assets/images/onboarding-streak.png')} style={styles.badge} contentFit="contain" />
+      <Image
+        source={require('@/assets/images/onboarding-streak.png')}
+        style={styles.badge}
+        contentFit="contain"
+      />
       <Text variant="heading" color={colors.white} style={styles.streakTitle}>
         7 Day Streak
       </Text>
@@ -76,8 +94,9 @@ export function StreakArt() {
 }
 
 const styles = StyleSheet.create({
-  alarmWrap: { flex: 1, alignItems: 'center', overflow: 'hidden', marginHorizontal: -20 },
-  alarm: { width: '84%', height: '120%' },
+  alarmWrap: { flex: 1, alignItems: 'center', marginHorizontal: -20 },
+  alarm: { width: '84%', aspectRatio: 805 / 1045 },
+  alarmFade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110 },
 
   rhythm: { flex: 1, paddingTop: 12 },
   bubble: {
@@ -89,7 +108,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
   },
-  bubbleOne: { backgroundColor: 'rgba(255,255,255,0.35)', transform: [{ rotate: '-8deg' }], marginRight: 40 },
+  bubbleOne: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    transform: [{ rotate: '-8deg' }],
+    marginRight: 40,
+  },
   bubbleTwo: {
     backgroundColor: 'rgba(237,208,255,0.75)',
     transform: [{ rotate: '6deg' }],
@@ -109,7 +132,14 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-7deg' }],
   },
   notificationHead: { flexDirection: 'row', gap: 12 },
-  bell: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#3A3A3A', alignItems: 'center', justifyContent: 'center' },
+  bell: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3A3A3A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   notificationBody: { flex: 1, gap: 2 },
 
   streak: { flex: 1, alignItems: 'center' },

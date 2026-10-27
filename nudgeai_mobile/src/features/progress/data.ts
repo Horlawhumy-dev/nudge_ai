@@ -1,6 +1,7 @@
 import type { BarDatum, DayStatus, OverdueTask, TopHabit, TopTaskGroup } from './types';
 
-const bars = (labels: string[], values: number[]): BarDatum[] => labels.map((label, i) => ({ label, value: values[i] }));
+const bars = (labels: string[], values: number[]): BarDatum[] =>
+  labels.map((label, i) => ({ label, value: values[i] }));
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKS = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
 
@@ -17,8 +18,10 @@ export const taskBars = {
 export const habitOverview = { streak: 7, consistency: 92, allTimeWins: 24 };
 export const taskOverview = { done: 18, total: 25, completionRate: 72, onTimeRate: 85, overdue: 3 };
 
-export const habitInsight = 'You’re most consistent on weekdays. Wednesdays are your strongest day. Try habit stacking on weekends to keep momentum.';
-export const taskInsight = 'You completed 85% of your tasks in the morning. Try scheduling your most important tasks before noon for better results.';
+export const habitInsight =
+  'You’re most consistent on weekdays. Wednesdays are your strongest day. Try habit stacking on weekends to keep momentum.';
+export const taskInsight =
+  'You completed 85% of your tasks in the morning. Try scheduling your most important tasks before noon for better results.';
 
 export const topHabits: TopHabit[] = [
   { id: 'h1', emoji: '💪', name: 'Morning Workout', streak: 7, completion: 95, accentIndex: 0 },
@@ -42,7 +45,20 @@ export const overdueTasks: OverdueTask[] = [
  * `todayIndex` is zero-based; days before it are seeded with a deterministic pattern.
  */
 export function buildConsistencyMap(daysInMonth: number, todayIndex: number): DayStatus[] {
-  const pattern: DayStatus[] = ['completed', 'missed', 'completed', 'completed', 'missed', 'some', 'completed', 'completed', 'some', 'missed', 'completed', 'some'];
+  const pattern: DayStatus[] = [
+    'completed',
+    'missed',
+    'completed',
+    'completed',
+    'missed',
+    'some',
+    'completed',
+    'completed',
+    'some',
+    'missed',
+    'completed',
+    'some',
+  ];
   return Array.from({ length: daysInMonth }, (_, i) => {
     if (i === todayIndex) return 'today';
     if (i > todayIndex) return 'future';

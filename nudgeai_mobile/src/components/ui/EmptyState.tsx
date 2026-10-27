@@ -17,7 +17,14 @@ type EmptyStateProps = {
   children?: ReactNode;
 };
 
-export function EmptyState({ icon, title, message, actionLabel, onAction, footnote }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  message,
+  actionLabel,
+  onAction,
+  footnote,
+}: EmptyStateProps) {
   return (
     <View style={styles.wrap}>
       <View style={styles.badge}>
@@ -29,7 +36,9 @@ export function EmptyState({ icon, title, message, actionLabel, onAction, footno
       <Text variant="bodyLarge" color={colors.textSecondary} align="center">
         {message}
       </Text>
-      {actionLabel && onAction ? <Button label={actionLabel} onPress={onAction} style={styles.action} /> : null}
+      {actionLabel && onAction ? (
+        <Button label={actionLabel} onPress={onAction} style={styles.action} />
+      ) : null}
       {footnote ? (
         <Text variant="body" color={colors.textMuted} align="center" style={styles.footnote}>
           {footnote}
@@ -41,7 +50,14 @@ export function EmptyState({ icon, title, message, actionLabel, onAction, footno
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', paddingHorizontal: 24 },
-  badge: { width: 60, height: 60, borderRadius: 16, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: { marginTop: 24, marginBottom: 8, fontSize: 24 },
   action: { marginTop: 28, alignSelf: 'stretch', marginHorizontal: 40 },
   footnote: { marginTop: 16 },

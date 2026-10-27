@@ -15,8 +15,18 @@ describe('isValidEmail', () => {
 
 describe('password rules', () => {
   it('reports each rule independently', () => {
-    expect(checkPassword('abc')).toEqual({ minLength: false, uppercase: false, number: false, special: false });
-    expect(checkPassword('Abcdefg1!')).toEqual({ minLength: true, uppercase: true, number: true, special: true });
+    expect(checkPassword('abc')).toEqual({
+      minLength: false,
+      uppercase: false,
+      number: false,
+      special: false,
+    });
+    expect(checkPassword('Abcdefg1!')).toEqual({
+      minLength: true,
+      uppercase: true,
+      number: true,
+      special: true,
+    });
   });
 
   it('requires every rule', () => {

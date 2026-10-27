@@ -19,7 +19,15 @@ type ListRowProps = {
   onPress?: () => void;
 };
 
-export function ListRow({ title, subtitle, icon, destructive = false, badge, trailing, onPress }: ListRowProps) {
+export function ListRow({
+  title,
+  subtitle,
+  icon,
+  destructive = false,
+  badge,
+  trailing,
+  onPress,
+}: ListRowProps) {
   const tone = destructive ? colors.danger : colors.text;
 
   return (
@@ -31,7 +39,15 @@ export function ListRow({ title, subtitle, icon, destructive = false, badge, tra
     >
       {icon ? (
         <View style={styles.tile}>
-          {typeof icon === 'string' ? <Icon name={icon as IconName} size={20} color={destructive ? colors.danger : colors.textSecondary} /> : icon}
+          {typeof icon === 'string' ? (
+            <Icon
+              name={icon as IconName}
+              size={20}
+              color={destructive ? colors.danger : colors.textSecondary}
+            />
+          ) : (
+            icon
+          )}
         </View>
       ) : null}
       <View style={styles.texts}>
@@ -53,7 +69,8 @@ export function ListRow({ title, subtitle, icon, destructive = false, badge, tra
           </Text>
         ) : null}
       </View>
-      {trailing ?? (onPress ? <Icon name="chevron-forward" size={20} color={colors.textSecondary} /> : null)}
+      {trailing ??
+        (onPress ? <Icon name="chevron-forward" size={20} color={colors.textSecondary} /> : null)}
     </Pressable>
   );
 }
@@ -82,5 +99,10 @@ const styles = StyleSheet.create({
   texts: { flex: 1 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   subtitle: { marginTop: 2 },
-  badge: { backgroundColor: colors.primaryTint, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 4 },
+  badge: {
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
 });

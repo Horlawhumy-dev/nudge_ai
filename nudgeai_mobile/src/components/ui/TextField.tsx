@@ -1,5 +1,14 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, TextInput, View, type TextInputProps, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+  type TextInputProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { colors, fonts, radius } from '@/theme';
 
@@ -39,7 +48,11 @@ export function TextField({
   return (
     <View style={containerStyle}>
       {label ? (
-        <Text variant="subheading" style={styles.label} color={pill ? colors.text : colors.textSecondary}>
+        <Text
+          variant="subheading"
+          style={styles.label}
+          color={pill ? colors.text : colors.textSecondary}
+        >
           {label}
         </Text>
       ) : null}
@@ -73,7 +86,11 @@ export function TextField({
             hitSlop={12}
             onPress={() => setRevealed((v) => !v)}
           >
-            <Icon name={revealed ? 'eye-outline' : 'eye-off-outline'} size={22} color={colors.textMuted} />
+            <Icon
+              name={revealed ? 'eye-outline' : 'eye-off-outline'}
+              size={22}
+              color={colors.textMuted}
+            />
           </Pressable>
         ) : null}
         {trailing}
@@ -94,10 +111,22 @@ export function TextField({
 const styles = StyleSheet.create({
   label: { marginBottom: 10 },
   field: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
-  pill: { height: 54, borderRadius: radius.pill, borderWidth: 1.5, backgroundColor: colors.surface },
+  pill: {
+    height: 54,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    backgroundColor: colors.surface,
+  },
   filled: { height: 48, borderRadius: radius.md, backgroundColor: colors.fill },
   multiline: { height: 96, alignItems: 'flex-start', paddingTop: 12 },
-  input: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.text, padding: 0 },
+  input: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.text,
+    padding: 0,
+    ...Platform.select({ web: { outlineStyle: 'none' } as object }),
+  },
   inputMultiline: { height: '100%', textAlignVertical: 'top' },
   note: { marginTop: 6, marginLeft: 6 },
 });

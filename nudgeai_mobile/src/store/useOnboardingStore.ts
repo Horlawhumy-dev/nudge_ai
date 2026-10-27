@@ -23,7 +23,10 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
   ...empty,
   setName: (name) => set({ name }),
   setWakeTime: (wakeTime) => set({ wakeTime }),
-  toggleGoal: (id) => set((s) => ({ goals: s.goals.includes(id) ? s.goals.filter((g) => g !== id) : [...s.goals, id] })),
+  toggleGoal: (id) =>
+    set((s) => ({
+      goals: s.goals.includes(id) ? s.goals.filter((g) => g !== id) : [...s.goals, id],
+    })),
   setSleepTime: (sleepTime) => set({ sleepTime }),
   setTone: (tone) => set({ tone }),
   reset: () => set(empty),

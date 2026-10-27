@@ -18,8 +18,8 @@ export default function StepTone() {
       sleepTime: sleepTime ?? '1030-12',
       goals,
     });
-    // Keep the full name from sign-up; the onboarding name is what reminders call the user.
-    useAuthStore.getState().completeOnboarding(useAuthStore.getState().user?.name ?? name);
+    // The full name stays as signed up; the onboarding name is what reminders call the user.
+    useAuthStore.getState().completeOnboarding(firstName(name));
     router.replace('/onboarding/ready');
   };
 
