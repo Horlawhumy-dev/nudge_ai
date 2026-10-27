@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { colors, fonts, radius } from '@/theme';
@@ -12,6 +12,8 @@ type TextFieldProps = Omit<TextInputProps, 'style'> & {
   hint?: string;
   /** Adds a show/hide toggle and masks the value. */
   secure?: boolean;
+  /** Icon or control shown at the right edge (e.g. a calendar glyph). */
+  trailing?: ReactNode;
   /** `pill` is the auth/onboarding look; `filled` is the sheet look. */
   appearance?: 'pill' | 'filled';
   containerStyle?: StyleProp<ViewStyle>;
@@ -22,6 +24,7 @@ export function TextField({
   error,
   hint,
   secure = false,
+  trailing,
   appearance = 'pill',
   multiline,
   containerStyle,
@@ -73,6 +76,7 @@ export function TextField({
             <Icon name={revealed ? 'eye-outline' : 'eye-off-outline'} size={22} color={colors.textMuted} />
           </Pressable>
         ) : null}
+        {trailing}
       </View>
       {error ? (
         <Text variant="caption" color={colors.danger} style={styles.note}>

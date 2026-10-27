@@ -27,3 +27,6 @@ export { Text } from './Text';
 export { TextField } from './TextField';
 export { Toggle } from './Toggle';
 export { UnderlineTabs } from './UnderlineTabs';
+export { Waveform } from './Waveform';
+export { SelectField } from './SelectField';
+export type { SelectOption } from './SelectField';

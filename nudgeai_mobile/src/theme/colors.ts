@@ -28,6 +28,8 @@ export const colors = {
   primaryPressed: palette.purpleDeep,
 
   inverse: palette.ink,
+  white: palette.white,
+  pink: palette.pink,
 
   danger: palette.red,
   dangerSoft: palette.redSoft,

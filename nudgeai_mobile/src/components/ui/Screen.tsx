@@ -16,6 +16,8 @@ type ScreenProps = {
   children: ReactNode;
   /** Pinned below the content, above the keyboard (CTA buttons). */
   footer?: ReactNode;
+  /** Floating elements (FABs) drawn above the scroll area. */
+  overlay?: ReactNode;
   scroll?: boolean;
   background?: string;
   /** Extra bottom space so content clears the floating tab bar. */
@@ -28,6 +30,7 @@ type ScreenProps = {
 export function Screen({
   children,
   footer,
+  overlay,
   scroll = false,
   background = colors.backgroundAuth,
   bottomInset = 0,
@@ -60,6 +63,7 @@ export function Screen({
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>{footer}</View>
         ) : null}
       </KeyboardAvoidingView>
+      {overlay}
     </View>
   );
 }
