@@ -2,7 +2,7 @@
 
 These run against the real Postgres fixture with the offline `FakeClient`, so
 tool calling, escalation, and the proposal gate are all exercised without
-spending a cent or touching the NVIDIA endpoint.
+spending a cent or touching a live Meta endpoint.
 """
 
 from __future__ import annotations

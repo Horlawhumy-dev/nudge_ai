@@ -27,7 +27,7 @@ EMAIL_VERIFICATION = "email_verification"
 PASSWORD_RESET = "password_reset"  # noqa: S105
 
 
-_resend: Resend | None = None
+_resend: resend.Emails | None = None
 
 
 def _get_resend() -> resend.Emails:

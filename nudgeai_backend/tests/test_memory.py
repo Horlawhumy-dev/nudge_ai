@@ -4,9 +4,9 @@ Recall quality splits in two:
 
   * Lexical recall (shared words) is verified here unconditionally, because it
     depends on the generated tsvector column and the GIN index.
-  * Paraphrased recall is verified only with a real NVIDIA key. The StaticEmbedder
-    is a token-hash, so it cannot possibly match a paraphrase; asserting it would
-    be asserting a falsehood rather than testing recall.
+  * Paraphrased recall is verified only with a real Meta embedding model. The
+  * StaticEmbedder is a token-hash, so it cannot possibly match a paraphrase;
+  * asserting it would be asserting a falsehood rather than testing recall.
 """
 
 from __future__ import annotations
@@ -313,8 +313,11 @@ async def test_memory_endpoints_require_auth(client: AsyncClient) -> None:
 
 
 @pytest.mark.skipif(
-    not get_settings().nvidia_api_key,
-    reason="needs NVIDIA_API_KEY; StaticEmbedder is a token-hash and cannot recall paraphrases",
+    not (get_settings().meta_api_key and get_settings().embedding_model),
+    reason=(
+        "needs META_API_KEY and EMBEDDING_MODEL; StaticEmbedder is a token-hash "
+        "and cannot recall paraphrases"
+    ),
 )
 async def test_paraphrased_recall(session: AsyncSession) -> None:
     user = await _user(session, "para@example.com")

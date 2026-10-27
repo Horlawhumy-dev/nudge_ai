@@ -32,8 +32,10 @@ _CREATE_VECTOR = text("CREATE EXTENSION IF NOT EXISTS vector")
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    # Keep the suite off the real NVIDIA endpoint and off a stray API key.
-    os.environ["NVIDIA_API_KEY"] = ""
+    # Keep the suite off the real Meta endpoints and off stray API keys.
+    os.environ["META_API_KEY"] = ""
+    os.environ["BASETEN_API_KEY"] = ""
+    os.environ["EMBEDDING_MODEL"] = ""
     os.environ["ENVIRONMENT"] = "test"
 
 
@@ -175,7 +177,7 @@ async def _reset_redis() -> AsyncIterator[None]:
 def _fake_models() -> AsyncIterator[None]:
     """Install the offline fake for every test, then restore the real client.
 
-    Without this, a stray NVIDIA_API_KEY in the developer's shell would make the
+    Without this, a stray META_API_KEY in the developer's shell would make the
     suite call the live endpoint and cost money.
     """
     from app.models.client import set_client

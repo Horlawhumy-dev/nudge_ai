@@ -163,6 +163,16 @@ def test_escalate_helper() -> None:
 
 
 def test_cost_matches_published_rates() -> None:
-    spec = spec_for("fast")
-    assert spec.cost_usd(prompt_tokens=1_000_000, completion_tokens=0) == pytest.approx(0.10)
-    assert spec.cost_usd(prompt_tokens=0, completion_tokens=1_000_000) == pytest.approx(0.30)
+    """cost_usd() must apply each tier's own registry rates.
+
+    Absolute Meta rates are unpublished until Gate 2b (currently 0.0
+    placeholders), so this pins the arithmetic, not the numbers. Gate 2b
+    restores absolute assertions once Meta pricing is confirmed.
+    """
+    for spec in all_specs():
+        assert spec.cost_usd(prompt_tokens=1_000_000, completion_tokens=0) == pytest.approx(
+            spec.input_cost_per_mtok
+        )
+        assert spec.cost_usd(prompt_tokens=0, completion_tokens=1_000_000) == pytest.approx(
+            spec.output_cost_per_mtok
+        )
