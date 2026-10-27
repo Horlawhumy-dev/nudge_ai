@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ReactNode } from 'react';
 
+import { haptics } from '@/lib/haptics';
 import { colors, radius } from '@/theme';
 
 import { Text } from './Text';
@@ -28,7 +29,10 @@ export function OptionRow({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      onPress={onPress}
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
       style={[
         styles.base,
         shape === 'pill' ? styles.pill : styles.card,

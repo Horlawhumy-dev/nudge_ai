@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
 import { Button, EmptyState, Screen, Text } from '@/components/ui';
-import { CreateHabitSheet } from '@/features/habits/components/CreateHabitSheet';
+import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { completedCount } from '@/features/habits/utils';
 import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
@@ -11,9 +11,10 @@ import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ListSection } from '@/features/home/components/ListSection';
 import { NudgeBanner } from '@/features/home/components/NudgeBanner';
 import { ProgressCard } from '@/features/home/components/ProgressCard';
-import { NewTaskSheet } from '@/features/tasks/components/NewTaskSheet';
-import { TaskRow } from '@/features/tasks/components/TaskRow';
-import { doneCount } from '@/features/tasks/utils';
+import { TaskList } from '@/features/tasks/components/TaskList';
+import { TaskSheet } from '@/features/tasks/components/TaskSheet';
+import { doneCount, isForToday } from '@/features/tasks/utils';
+import { useNow } from '@/hooks/useNow';
 import { greeting } from '@/lib/format';
 import { displayName, useAuthStore } from '@/store/useAuthStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
@@ -28,12 +29,14 @@ export default function Home() {
   const habits = useHabitsStore((s) => s.habits);
   const streak = useHabitsStore((s) => s.streak);
   const tasks = useTasksStore((s) => s.tasks);
-  const toggleTask = useTasksStore((s) => s.toggleTask);
   const [habitSheet, setHabitSheet] = useState(false);
   const [taskSheet, setTaskSheet] = useState(false);
 
   const isEmpty = habits.length === 0 && tasks.length === 0;
-  const orderedTasks = [...tasks].sort((a, b) => Number(b.done) - Number(a.done));
+  const now = useNow();
+  const todayTasks = tasks
+    .filter((t) => isForToday(t, now))
+    .sort((a, b) => Number(b.done) - Number(a.done));
   const message =
     streak > 0
       ? `Deep work in 10 mins. You’re on a ${streak}-day streak. Keep going ${name}.`
@@ -47,7 +50,11 @@ export default function Home() {
       contentStyle={styles.content}
       overlay={<AskNudgeButton bottom={clearance - 8} expanded={isEmpty} />}
     >
-      <HomeHeader greeting={greeting(name)} streak={streak} unread={isEmpty ? 0 : UNREAD_NUDGES} />
+      <HomeHeader
+        greeting={greeting(name, now)}
+        streak={streak}
+        unread={isEmpty ? 0 : UNREAD_NUDGES}
+      />
 
       {isEmpty ? (
         <View style={styles.empty}>
@@ -73,8 +80,8 @@ export default function Home() {
                 color={colors.accents[0]}
               />
               <ProgressCard
-                done={doneCount(tasks)}
-                total={tasks.length}
+                done={doneCount(todayTasks)}
+                total={todayTasks.length}
                 label="Tasks done"
                 color={colors.accents[1]}
               />
@@ -92,10 +99,8 @@ export default function Home() {
             )}
           </ListSection>
           <ListSection title="To-do list" addLabel="Add task" onAdd={() => setTaskSheet(true)}>
-            {orderedTasks.length > 0 ? (
-              orderedTasks.map((task) => (
-                <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} />
-              ))
+            {todayTasks.length > 0 ? (
+              <TaskList tasks={todayTasks} />
             ) : (
               <Button label="Add a task" variant="outline" onPress={() => setTaskSheet(true)} />
             )}
@@ -103,8 +108,8 @@ export default function Home() {
         </>
       )}
 
-      <CreateHabitSheet visible={habitSheet} onClose={() => setHabitSheet(false)} />
-      <NewTaskSheet visible={taskSheet} onClose={() => setTaskSheet(false)} />
+      <HabitSheet visible={habitSheet} onClose={() => setHabitSheet(false)} />
+      <TaskSheet visible={taskSheet} onClose={() => setTaskSheet(false)} />
     </Screen>
   );
 }

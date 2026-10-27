@@ -2,37 +2,45 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { BottomSheet, Button, Chip, SelectField, Text, TextField, Toggle } from '@/components/ui';
+import { toast } from '@/store/useToastStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { colors, radius } from '@/theme';
 
 import { FREQUENCIES, HABIT_CATEGORIES, HABIT_ICONS, TIMES_OF_DAY } from '../constants';
-import type { HabitFrequency, TimeOfDay } from '../types';
+import type { Habit, HabitFrequency, TimeOfDay } from '../types';
 
-type CreateHabitSheetProps = {
+type HabitSheetProps = {
   visible: boolean;
   onClose: () => void;
+  /** Pass a habit to edit it; omit to create. Give the sheet a `key` per habit so its form resets. */
+  habit?: Habit;
 };
 
 const FREQUENCY_OPTIONS = FREQUENCIES.map((f) => ({ label: f, value: f }));
 
-export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
+export function HabitSheet({ visible, onClose, habit }: HabitSheetProps) {
   const habits = useHabitsStore((s) => s.habits);
   const addHabit = useHabitsStore((s) => s.addHabit);
+  const updateHabit = useHabitsStore((s) => s.updateHabit);
   const stackingEnabled = usePreferencesStore((s) => s.habitStacking);
+  const editing = habit !== undefined;
 
-  const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState<string>(HABIT_ICONS[0]);
-  const [category, setCategory] = useState<string>(HABIT_CATEGORIES[0]);
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('Morning');
-  const [frequency, setFrequency] = useState<HabitFrequency>('Daily');
-  const [stack, setStack] = useState(false);
-  const [trigger, setTrigger] = useState<string | null>(null);
+  const [name, setName] = useState(habit?.name ?? '');
+  const [emoji, setEmoji] = useState<string>(habit?.emoji ?? HABIT_ICONS[0]);
+  const [category, setCategory] = useState<string>(habit?.category ?? HABIT_CATEGORIES[0]);
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(habit?.timeOfDay ?? 'Morning');
+  const [frequency, setFrequency] = useState<HabitFrequency>(habit?.frequency ?? 'Daily');
+  const [stack, setStack] = useState(Boolean(habit?.stackedAfter));
+  const [trigger, setTrigger] = useState<string | null>(habit?.stackedAfter ?? null);
 
-  const canStack = stackingEnabled && habits.length > 0;
+  const candidates = habits.filter((h) => h.id !== habit?.id);
+  const canStack = stackingEnabled && candidates.length > 0;
   const canSubmit = name.trim().length > 0;
+  const triggerId = trigger ?? candidates[0]?.id ?? null;
 
   const reset = () => {
+    if (editing) return;
     setName('');
     setEmoji(HABIT_ICONS[0]);
     setCategory(HABIT_CATEGORIES[0]);
@@ -49,32 +57,38 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
 
   const submit = () => {
     if (!canSubmit) return;
-    addHabit({
+    const draft = {
       name: name.trim(),
       emoji,
       category,
       timeOfDay,
       frequency,
-      stackedAfter: stack ? (trigger ?? habits[0]?.id) : undefined,
-    });
+      stackedAfter: stack && canStack ? (triggerId ?? undefined) : undefined,
+    };
+    if (habit) {
+      updateHabit(habit.id, draft);
+      toast.success('Habit updated');
+    } else {
+      addHabit(draft);
+      toast.success('Habit created');
+    }
     close();
   };
 
-  const triggerOptions = habits.map((h) => ({ label: h.name, value: h.id }));
-  const triggerName =
-    habits.find((h) => h.id === (trigger ?? habits[0]?.id))?.name ?? 'your trigger habit';
+  const triggerOptions = candidates.map((h) => ({ label: h.name, value: h.id }));
+  const triggerName = candidates.find((h) => h.id === triggerId)?.name ?? 'your trigger habit';
 
   return (
     <BottomSheet
       visible={visible}
-      title="Create New Habit"
+      title={editing ? 'Edit Habit' : 'Create New Habit'}
       onClose={close}
       footer={
         <Button
-          label="Create habit"
+          label={editing ? 'Save changes' : 'Create habit'}
           onPress={submit}
           disabled={!canSubmit}
-          testID="create-habit-submit"
+          testID="habit-submit"
         />
       }
     >
@@ -84,6 +98,8 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
         placeholder="e.g. morning workout"
         value={name}
         onChangeText={setName}
+        autoFocus={!editing}
+        maxLength={40}
       />
 
       <View style={styles.group}>
@@ -169,7 +185,7 @@ export function CreateHabitSheet({ visible, onClose }: CreateHabitSheetProps) {
               <SelectField
                 nested
                 label="Trigger after"
-                value={trigger ?? habits[0]?.id ?? null}
+                value={triggerId}
                 options={triggerOptions}
                 onChange={setTrigger}
               />

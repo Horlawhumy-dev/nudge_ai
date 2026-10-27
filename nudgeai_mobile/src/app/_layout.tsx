@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ToastHost } from '@/components/ui';
 import { useAppFonts } from '@/hooks/useAppFonts';
 import { colors } from '@/theme';
 
@@ -23,6 +24,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
+        <ToastHost />
         <Stack
           screenOptions={{
             headerShown: false,

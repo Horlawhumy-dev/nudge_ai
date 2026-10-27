@@ -1,59 +1,108 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-import { seedHabits } from '@/features/habits/data';
-import type { Habit, HabitDraft } from '@/features/habits/types';
+import { buildSeedHabits } from '@/features/habits/data';
+import { GOAL_DAYS, type Habit, type HabitDraft } from '@/features/habits/types';
+import { dateKey } from '@/lib/date';
 import { createId } from '@/lib/format';
 import { colors } from '@/theme';
+
+import { persistStorage } from './persist';
 
 type HabitsState = {
   habits: Habit[];
   streak: number;
   addHabit: (draft: HabitDraft) => Habit;
-  toggleHabit: (id: string) => void;
-  removeHabit: (id: string) => void;
+  updateHabit: (id: string, patch: Partial<HabitDraft>) => void;
+  /** Tick or untick a habit for `now`'s calendar day. Returns whether it is now done. */
+  toggleHabit: (id: string, now?: Date) => boolean;
+  /** Removes the habit and returns what's needed to undo it. */
+  removeHabit: (id: string) => { habit: Habit; index: number } | null;
+  restoreHabit: (habit: Habit, index: number) => void;
   /** Replace local data with the demo account's habits. */
   seedDemo: () => void;
   /** Start from a blank slate (fresh sign-up). */
   clear: () => void;
 };
 
-export const useHabitsStore = create<HabitsState>((set, get) => ({
-  habits: [],
-  streak: 0,
+export const useHabitsStore = create<HabitsState>()(
+  persist(
+    (set, get) => ({
+      habits: [],
+      streak: 0,
 
-  addHabit: (draft) => {
-    const habit: Habit = {
-      ...draft,
-      id: createId('habit'),
-      completedToday: false,
-      daysDone: 0,
-      goalDays: draft.frequency === 'Weekly' ? 1 : draft.frequency === 'Weekdays' ? 5 : 7,
-      accentIndex: get().habits.length % colors.accents.length,
-    };
-    set((s) => ({ habits: [...s.habits, habit] }));
-    return habit;
-  },
-
-  toggleHabit: (id) =>
-    set((s) => ({
-      habits: s.habits.map((h) => {
-        if (h.id !== id) return h;
-        const completedToday = !h.completedToday;
-        return {
-          ...h,
-          completedToday,
-          daysDone: Math.max(0, Math.min(h.goalDays, h.daysDone + (completedToday ? 1 : -1))),
+      addHabit: (draft) => {
+        const habit: Habit = {
+          ...draft,
+          id: createId('habit'),
+          goalDays: GOAL_DAYS[draft.frequency],
+          accentIndex: get().habits.length % colors.accents.length,
+          completions: [],
         };
-      }),
-    })),
+        set((s) => ({ habits: [...s.habits, habit] }));
+        return habit;
+      },
 
-  removeHabit: (id) =>
-    set((s) => ({
-      habits: s.habits
-        .filter((h) => h.id !== id)
-        .map((h) => (h.stackedAfter === id ? { ...h, stackedAfter: undefined } : h)),
-    })),
+      updateHabit: (id, patch) =>
+        set((s) => ({
+          habits: s.habits.map((h) =>
+            h.id === id
+              ? {
+                  ...h,
+                  ...patch,
+                  goalDays: patch.frequency ? GOAL_DAYS[patch.frequency] : h.goalDays,
+                }
+              : h
+          ),
+        })),
 
-  seedDemo: () => set({ habits: seedHabits, streak: 7 }),
-  clear: () => set({ habits: [], streak: 0 }),
-}));
+      toggleHabit: (id, now = new Date()) => {
+        const key = dateKey(now);
+        let done = false;
+        set((s) => ({
+          habits: s.habits.map((h) => {
+            if (h.id !== id) return h;
+            const has = h.completions.includes(key);
+            done = !has;
+            return {
+              ...h,
+              completions: has ? h.completions.filter((k) => k !== key) : [...h.completions, key],
+            };
+          }),
+        }));
+        return done;
+      },
+
+      removeHabit: (id) => {
+        const { habits } = get();
+        const index = habits.findIndex((h) => h.id === id);
+        if (index < 0) return null;
+        const habit = habits[index];
+        set({
+          habits: habits
+            .filter((h) => h.id !== id)
+            .map((h) => (h.stackedAfter === id ? { ...h, stackedAfter: undefined } : h)),
+        });
+        return { habit, index };
+      },
+
+      restoreHabit: (habit, index) =>
+        set((s) => {
+          const next = [...s.habits];
+          next.splice(Math.min(index, next.length), 0, habit);
+          return { habits: next };
+        }),
+
+      seedDemo: () => set({ habits: buildSeedHabits(), streak: 7 }),
+      clear: () => set({ habits: [], streak: 0 }),
+    }),
+    {
+      name: 'nudge.habits',
+      // v2 replaced completedToday/daysDone with dated completions; older saves are dropped.
+      version: 2,
+      migrate: () => ({ habits: [], streak: 0 }),
+      storage: persistStorage,
+      partialize: (s) => ({ habits: s.habits, streak: s.streak }),
+    }
+  )
+);

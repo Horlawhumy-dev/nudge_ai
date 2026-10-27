@@ -6,11 +6,18 @@ import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
 import { EmptyState, Fab, Screen, ScreenHeader } from '@/components/ui';
 import { FilterBar } from '@/features/habits/components/FilterBar';
 import { StatPill } from '@/features/habits/components/StatPill';
-import { NewTaskSheet } from '@/features/tasks/components/NewTaskSheet';
-import { TaskRow } from '@/features/tasks/components/TaskRow';
+import { TaskList } from '@/features/tasks/components/TaskList';
+import { TaskSheet } from '@/features/tasks/components/TaskSheet';
 import { TaskSectionHeader } from '@/features/tasks/components/TaskSectionHeader';
 import type { TaskFilter } from '@/features/tasks/types';
-import { doneCount, groupTasks, matchesFilter } from '@/features/tasks/utils';
+import {
+  doneCount,
+  groupTasks,
+  isForToday,
+  isVisible,
+  matchesFilter,
+} from '@/features/tasks/utils';
+import { useNow } from '@/hooks/useNow';
 import { formatLongDate } from '@/lib/format';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors } from '@/theme';
@@ -27,12 +34,17 @@ export default function Tasks() {
   const router = useRouter();
   const clearance = useTabBarClearance();
   const tasks = useTasksStore((s) => s.tasks);
-  const toggleTask = useTasksStore((s) => s.toggleTask);
   const [filter, setFilter] = useState<TaskFilter>('All');
   const [sheet, setSheet] = useState(false);
 
-  const sections = groupTasks(tasks.filter((t) => matchesFilter(t, filter)));
-  const done = doneCount(tasks);
+  const now = useNow();
+  const visible = tasks.filter((t) => isVisible(t, now));
+  const sections = groupTasks(
+    visible.filter((t) => matchesFilter(t, filter, now)),
+    now
+  );
+  const today = tasks.filter((t) => isForToday(t, now));
+  const done = doneCount(today);
 
   return (
     <Screen
@@ -46,30 +58,29 @@ export default function Tasks() {
     >
       <ScreenHeader
         title="My Tasks"
-        subtitle={formatLongDate()}
+        subtitle={formatLongDate(now)}
         onBack={() => router.navigate('/home')}
-        right={<StatPill emoji={moodEmoji(done, tasks.length)} label={`${done}/${tasks.length}`} />}
+        right={<StatPill emoji={moodEmoji(done, today.length)} label={`${done}/${today.length}`} />}
       />
       <FilterBar filters={FILTERS} value={filter} onChange={setFilter} />
       {sections.length > 0 ? (
         sections.map((section) => (
-          <View key={section.status} style={styles.section}>
-            <TaskSectionHeader status={section.status} title={section.title} />
-            {section.tasks.map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} />
-            ))}
-          </View>
+          <TaskList
+            key={section.status}
+            tasks={section.tasks}
+            header={<TaskSectionHeader status={section.status} title={section.title} />}
+          />
         ))
       ) : (
         <View style={styles.empty}>
           <EmptyState
             icon="clipboard-outline"
-            title={tasks.length === 0 ? 'No tasks yet' : `No ${filter.toLowerCase()} tasks`}
+            title={visible.length === 0 ? 'No tasks yet' : `No ${filter.toLowerCase()} tasks`}
             message="Tap + to add a task and Nudge will remind you when it’s time."
           />
         </View>
       )}
-      <NewTaskSheet visible={sheet} onClose={() => setSheet(false)} />
+      <TaskSheet visible={sheet} onClose={() => setSheet(false)} />
     </Screen>
   );
 }

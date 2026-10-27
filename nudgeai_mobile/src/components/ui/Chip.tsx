@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { ReactNode } from 'react';
 
+import { haptics } from '@/lib/haptics';
 import { colors, radius } from '@/theme';
 
 import { Text } from './Text';
@@ -50,7 +51,14 @@ export function Chip({
 
   if (!onPress) return body;
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+    >
       {body}
     </Pressable>
   );

@@ -1,6 +1,9 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 import type { ToneId } from '@/features/onboarding/data';
+
+import { persistStorage, STORE_VERSION } from './persist';
 
 export type NotificationKey = 'push' | 'voice' | 'morningSummary' | 'weeklyReport' | 'streakAlerts';
 export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
@@ -63,11 +66,33 @@ const initial = {
   plan: 'free' as Plan,
 };
 
-export const usePreferencesStore = create<PreferencesState>((set) => ({
-  ...initial,
-  set: (patch) => set(patch),
-  setNotification: (key, value) =>
-    set((s) => ({ notifications: { ...s.notifications, [key]: value } })),
-  setQuietHours: (patch) => set((s) => ({ quietHours: { ...s.quietHours, ...patch } })),
-  reset: () => set(initial),
-}));
+export const usePreferencesStore = create<PreferencesState>()(
+  persist(
+    (set) => ({
+      ...initial,
+      set: (patch) => set(patch),
+      setNotification: (key, value) =>
+        set((s) => ({ notifications: { ...s.notifications, [key]: value } })),
+      setQuietHours: (patch) => set((s) => ({ quietHours: { ...s.quietHours, ...patch } })),
+      reset: () => set(initial),
+    }),
+    {
+      name: 'nudge.preferences',
+      version: STORE_VERSION,
+      storage: persistStorage,
+      partialize: (s) => ({
+        tone: s.tone,
+        useName: s.useName,
+        includeStreak: s.includeStreak,
+        useEmojis: s.useEmojis,
+        wakeTime: s.wakeTime,
+        sleepTime: s.sleepTime,
+        goals: s.goals,
+        habitStacking: s.habitStacking,
+        notifications: s.notifications,
+        quietHours: s.quietHours,
+        plan: s.plan,
+      }),
+    }
+  )
+);

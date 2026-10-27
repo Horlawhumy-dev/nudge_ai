@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
 import { EmptyState, Fab, Screen, ScreenHeader } from '@/components/ui';
 import { HABIT_FILTERS, type HabitFilter } from '@/features/habits/constants';
-import { CreateHabitSheet } from '@/features/habits/components/CreateHabitSheet';
+import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { FilterBar } from '@/features/habits/components/FilterBar';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { StatPill } from '@/features/habits/components/StatPill';
@@ -54,7 +54,7 @@ export default function Habits() {
           />
         </View>
       )}
-      <CreateHabitSheet visible={sheet} onClose={() => setSheet(false)} />
+      <HabitSheet visible={sheet} onClose={() => setSheet(false)} />
     </Screen>
   );
 }

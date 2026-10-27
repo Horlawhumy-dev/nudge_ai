@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, Text } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { colors, gutter, shadows } from '@/theme';
 
 import { TAB_BAR_HEIGHT, TAB_ITEMS, type TabName } from './tabs';
@@ -28,7 +29,10 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
               target: route.key,
               canPreventDefault: true,
             });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+            if (!focused && !event.defaultPrevented) {
+              haptics.select();
+              navigation.navigate(route.name);
+            }
           };
 
           return (

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import type { ReactNode } from 'react';
 
+import { haptics } from '@/lib/haptics';
 import { colors, radius, shadows } from '@/theme';
 
 import { Text } from './Text';
@@ -53,7 +54,10 @@ export function Button({
       accessibilityRole="button"
       accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
-      onPress={onPress}
+      onPress={() => {
+        haptics.tap();
+        onPress?.();
+      }}
       testID={testID}
       style={({ pressed }) => [
         styles.base,

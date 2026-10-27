@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
+import { haptics } from '@/lib/haptics';
 import { colors } from '@/theme';
 
 type ToggleProps = {
@@ -40,7 +41,10 @@ export function Toggle({ value, onValueChange, accessibilityLabel }: ToggleProps
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value }}
       hitSlop={8}
-      onPress={() => onValueChange(!value)}
+      onPress={() => {
+        haptics.select();
+        onValueChange(!value);
+      }}
     >
       <Animated.View style={[styles.track, { backgroundColor }]}>
         <Animated.View style={[styles.knob, { transform: [{ translateX }] }]} />

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 
 import { Icon } from '@/components/ui';
+import { haptics } from '@/lib/haptics';
 import { colors } from '@/theme';
 
 type CheckboxProps = {
@@ -17,7 +18,11 @@ export function Checkbox({ checked, onPress, accessibilityLabel }: CheckboxProps
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked }}
       hitSlop={10}
-      onPress={onPress}
+      onPress={() => {
+        if (checked) haptics.select();
+        else haptics.success();
+        onPress();
+      }}
       style={[styles.box, checked ? styles.checked : styles.unchecked]}
     >
       {checked ? <Icon name="checkmark" size={14} color={colors.white} /> : null}
