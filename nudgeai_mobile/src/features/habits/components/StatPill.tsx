@@ -13,7 +13,7 @@ export function StatPill({ emoji, label }: StatPillProps) {
   return (
     <View style={styles.pill}>
       <RNText style={styles.emoji}>{emoji}</RNText>
-      <Text variant="body" color={colors.textSecondary}>
+      <Text variant="body" color={colors.textSecondary} style={styles.label}>
         {label}
       </Text>
     </View>
@@ -30,5 +30,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.fill,
   },
-  emoji: { fontSize: 18 },
+  emoji: { fontSize: 16 },
+  label: { fontSize: 13 },
 });

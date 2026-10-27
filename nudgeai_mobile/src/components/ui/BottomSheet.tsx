@@ -9,10 +9,10 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  useAnimatedValue,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { colors, gutter } from '@/theme';
 
 import { Icon } from './Icon';

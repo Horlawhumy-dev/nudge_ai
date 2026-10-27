@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { Animated, StyleSheet, View, useAnimatedValue } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { colors } from '@/theme';
 
 function Dot({ delay }: { delay: number }) {

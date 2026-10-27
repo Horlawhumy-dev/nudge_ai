@@ -1,86 +1,93 @@
 # Nudge AI — mobile
 
 Expo/React Native client for Nudge AI. Scope is **P0** of
-`../NudgeAI_Meta_AI_Developer_7Day_Hackathon_MVP_Product_Spec.pdf` only — the habit/task planner, the home
-nudge dashboard, progress, chat, and account/settings.
+`../docs/NudgeAI_Meta_AI_Developer_7Day_Hackathon_MVP_Product_Spec.pdf` — onboarding and auth, the
+home nudge dashboard, habits, tasks, progress, Nudge AI chat (text + voice), and account/settings.
 
-The FastAPI backend in `../nudgeai_backend/` exists but does not yet cover the whole P0
-surface, so the app ships a **mock transport**: an axios adapter that answers with the same
-routes, status codes and error bodies the real API uses. Every screen talks to
-`src/services/api/client.ts` either way — flipping to live HTTP is
-`EXPO_PUBLIC_USE_MOCK=0` (plus `EXPO_PUBLIC_API_URL` if it is not on this machine's
-`localhost:8000`).
+**Current state: a static build.** Every screen in the design set (`../Nudge/`) is implemented and
+navigable, running on local seed data held in zustand stores. There is no network code yet; the
+`src/services/api/` files are empty placeholders for the backend work.
 
 ## Stack
 
-Expo SDK 57 · expo-router · TypeScript (strict) · TanStack Query · zustand ·
-axios + refresh interceptor · expo-secure-store · Jest + React Native Testing Library ·
-ESLint + Prettier.
-
-Conventions follow `../passika_mobile`, with one deliberate difference — see below.
-
-## Layout
-
-```
-assets/images/            app icons, splash, notification icon (generated from the design set)
-assets/images/design/     board crops used as visual QA references while building screens
-src/app/                  expo-router routes (_layout.tsx, index.tsx, …)
-src/constants/env.ts      API base URL, mock/live switch, mock latency
-src/services/api/         client (axios + refresh), errors, wire types, endpoint modules
-src/services/api/mock/    in-memory fixture store + the axios adapter behind `useMock`
-src/services/secureStorage/  token pair in SecureStore (localStorage on web)
-src/store/                zustand stores — auth session
-src/theme/                design tokens: palette → colors/gradients, typography, radius, …
-```
-
-> **Deviation from `passika_mobile`:** the Expo template scaffolded routes into
-> `src/app/` instead of a root-level `app/`. Because `tsconfig.json` maps `@/*` →
-> `./src/*`, keeping them there means routes and everything else share one import root.
-> Route files are still ordinary expo-router files; only their path changed.
+Expo SDK 57 · expo-router (typed routes) · TypeScript (strict) · zustand · react-native-svg ·
+expo-linear-gradient · expo-image · Jest + ESLint (React Compiler rules) + Prettier.
 
 ## Scripts
 
 ```bash
-npm start          # expo dev server
+npm start          # expo dev server (press w for web, or scan with Expo Go)
 npm run typecheck  # tsc --noEmit
 npm run lint       # expo lint
 npm test           # jest
 npm run format     # prettier --write .
 ```
 
-## Mock API
+## Try it
 
-`EXPO_PUBLIC_USE_MOCK` (default on) swaps the axios adapter for an in-memory transport that
-mirrors `../nudgeai_backend/` route for route: flat Pydantic bodies (no envelope), FastAPI
-`{ detail }` / 422 `{ detail: [{ loc, msg, type }] }` errors, and rotating refresh tokens.
+- **Log in** with any valid email and any password → seeded demo account (4 habits, 5 tasks, 7-day streak).
+- **Sign up** → any 4-digit verification code works → 5-step setup → an empty Home (the "Your day starts here" state).
+- Forgot password → any 4-digit code → new password (8+ chars, capital, number, special).
 
-- Seeded account: **demo@nudge.ai / Password1** (verified, 3 habits, 3 tasks).
-- New sign-ups start unverified; the mock always issues code **123456**
-  (`verify-email` / `resend-code` / `forgot-password`).
-- `EXPO_PUBLIC_MOCK_LATENCY_MS` adds artificial delay (0 in tests).
+## Layout
 
-Set `EXPO_PUBLIC_USE_MOCK=0` once the matching backend routes are live.
+```
+src/app/                    expo-router routes only — thin screens that compose features
+  index.tsx                   splash, then routes by session status
+  intro.tsx                   3-slide intro
+  (auth)/                     login, signup, verify, verified, forgot/new password, reset success
+  onboarding/                 step-1 … step-5, ready
+  (main)/                     guarded by session status (redirects to / when signed out)
+    (tabs)/                     home, habits, tasks, progress, profile (floating tab bar)
+    chat/                       index, history, voice
+    settings/                   index, notifications, ai-voice, quiet-hours, wake/sleep time,
+                                edit-profile, subscription
+src/components/ui/          design-system primitives (Button, TextField, Chip, BottomSheet, …)
+src/components/layout/      floating tab bar + clearance hook
+src/features/<name>/        per-feature types, seed data, pure utils and feature components
+src/store/                  zustand stores: auth session, habits, tasks, chat, preferences, onboarding
+src/lib/                    validation + formatting helpers
+src/hooks/                  useAppFonts, useCountdown, useAnimatedValue
+src/theme/                  tokens: palette → colors/gradients, typography, radius, spacing, shadows
+assets/images/              app icons plus art cut from the design set (AI orb, intro art, avatar, confetti)
+assets/images/design/       board crops used as visual QA references
+```
+
+Conventions:
+
+- Routes stay thin. Anything reusable lives in `components/` or `features/`.
+- Screens read colours, type and spacing from `@/theme`; no raw hex values in components.
+- Stores expose actions, not setters, and mocked-async actions (auth) take a beat so loading states
+  are real. Replace their bodies with API calls when the backend is wired in.
+- Seed data and scripted chat replies live in `features/*/data.ts` and `features/chat/replies.ts`.
+- `@/*` maps to `src/*`, `@/assets/*` to `assets/*`.
 
 ## Design references
 
-The design set lives in `../Nudge/` (41 exported screens plus `Nudge.pdf`, the master
-board). Seven screens — the five onboarding steps plus their filled/ready variants — are
-**only** on the master board, so they were cropped into `assets/images/design/` for
-side-by-side QA. Every other screen stays in `../Nudge/` and is referenced by path.
+The design set lives in `../Nudge/` (exported screens plus `Nudge.pdf`, the master board). Tokens in
+`src/theme/` are sampled from it: light theme only, primary `#C15EFF`, Playfair Display for titles
+and numerals, Inter for body, pill-shaped controls, emoji as habit/category icons.
 
-Design tokens in `src/theme/` are transcribed from that set: light theme only
-(`#F3F3F5` background, white surfaces, `#A855F7` primary), Playfair Display for display
-type and Inter for body, 20/28/999 radii, and emoji-as-icon for habits and categories.
+Notes on deviations from the design set:
+
+- The password-reset CTA reads "Reset password" (the design file says "Send email", which looks like a copy slip).
+- Quiet hours and Wake/Sleep time have no dedicated board for every state; they reuse the onboarding
+  option lists and the quiet-hours design.
+- Privacy & Security, Help, Feedback, Rate and "change photo" show a "coming soon" dialog until their
+  backends or native modules exist (e.g. `expo-image-picker`).
+- Free-plan limits (3 habits, 5 tasks) are shown on the subscription screen but not enforced; the demo
+  data itself exceeds them.
 
 ## Build order
 
 1. Scaffold, config, theme tokens, design-asset extraction ✅
-2. API layer: wire types, `ApiError`, axios client + refresh interceptor, mock transport, auth store ✅
-3. Core components (Button, Input, Card, Chip, Sheet, EmptyState, …)
-4. Onboarding + auth stack
-5. Tab shell (Home, Habits, Tasks, Progress, Profile)
-6. Habits and Tasks (P0 limits: 3 habits, 5 tasks/day, mock)
-7. Home dashboard + nudge cards + notifications
-8. Progress + chat
-9. Settings, Profile, subscription (UI only, no billing SDK)
-10. Polish: dark pass, a11y, empty/error states, release config
+2. Core components (Button, TextField, Chip, Sheet, EmptyState, …) ✅
+3. Onboarding + auth flow ✅
+4. Tab shell (Home, Habits, Tasks, Progress, Profile) ✅
+5. Habits and tasks with create sheets ✅
+6. Home dashboard, nudge banner, empty state ✅
+7. Progress (habits + tasks) ✅
+8. Nudge AI chat: text, history, voice (simulated) ✅
+9. Settings, profile, subscription (UI only, no billing SDK) ✅
+10. Backend wiring: API client, auth tokens, real data, notifications, speech
+11. Polish: dark pass, a11y audit, error states, release config

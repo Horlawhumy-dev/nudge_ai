@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { Animated, Pressable, StyleSheet, useAnimatedValue } from 'react-native';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { colors } from '@/theme';
 
 type ToggleProps = {

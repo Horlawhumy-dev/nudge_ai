@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
-import { Animated, useAnimatedValue } from 'react-native';
+import { Animated } from 'react-native';
+
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 import { AiOrb } from '@/components/ui';
 

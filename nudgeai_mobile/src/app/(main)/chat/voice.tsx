@@ -65,10 +65,10 @@ export default function Voice() {
       {showOrb ? (
         <View style={styles.orbWrap}>
           <PulsingOrb size={300} active={phase === 'listening'} />
-          <Text variant="heading" align="center" style={styles.transcript}>
+          <Text variant="bodyMedium" align="center" style={styles.transcript}>
             {transcript.heard}
             {transcript.pending ? (
-              <Text variant="heading" color={colors.border} style={styles.transcript}>
+              <Text variant="bodyMedium" color={colors.border} style={styles.transcript}>
                 {transcript.heard ? ' ' : ''}
                 {transcript.pending}
               </Text>
