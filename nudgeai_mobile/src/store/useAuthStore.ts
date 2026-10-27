@@ -4,6 +4,8 @@ import { persist } from 'zustand/middleware';
 import { sleep } from '@/lib/format';
 
 import { useHabitsStore } from './useHabitsStore';
+import { useChatStore } from './useChatStore';
+import { useNotificationsStore } from './useNotificationsStore';
 import { usePreferencesStore } from './usePreferencesStore';
 import { useTasksStore } from './useTasksStore';
 import { persistStorage, STORE_VERSION } from './persist';
@@ -14,6 +16,8 @@ export type User = {
   name: string;
   /** What reminders call the user (set in onboarding). Falls back to the first name. */
   nickname?: string;
+  /** Local image URI chosen in Edit profile; falls back to the bundled avatar. */
+  avatarUri?: string;
   email: string;
 };
 
@@ -40,7 +44,7 @@ type AuthState = {
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (password: string) => Promise<void>;
   completeOnboarding: (nickname: string) => void;
-  updateProfile: (patch: Partial<Pick<User, 'name' | 'email'>>) => void;
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'email' | 'avatarUri'>>) => void;
   signOut: () => void;
 };
 
@@ -70,6 +74,8 @@ export const useAuthStore = create<AuthState>()(
         await sleep(MOCK_LATENCY_MS);
         useHabitsStore.getState().seedDemo();
         useTasksStore.getState().seedDemo();
+        useNotificationsStore.getState().seedDemo();
+        useChatStore.getState().seedDemo();
         set({ status: 'ready', user: { ...DEMO_USER, email: email.trim() || DEMO_USER.email } });
       },
 
@@ -77,6 +83,8 @@ export const useAuthStore = create<AuthState>()(
         await sleep(MOCK_LATENCY_MS);
         useHabitsStore.getState().clear();
         useTasksStore.getState().clear();
+        useNotificationsStore.getState().clear();
+        useChatStore.getState().clear();
         usePreferencesStore.getState().reset();
         set({
           status: 'unverified',

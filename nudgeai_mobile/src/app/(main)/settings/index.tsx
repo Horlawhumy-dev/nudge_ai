@@ -2,10 +2,11 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { ConfirmDialog, ListRow, Screen, ScreenHeader, SectionCard } from '@/components/ui';
-import { ComingSoonDialog } from '@/features/settings/components/ComingSoonDialog';
+import { RateDialog } from '@/features/settings/components/RateDialog';
 import { ToggleRow } from '@/features/settings/components/ToggleRow';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
+import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
 export default function Settings() {
@@ -13,7 +14,7 @@ export default function Settings() {
   const habitStacking = usePreferencesStore((s) => s.habitStacking);
   const setPreferences = usePreferencesStore((s) => s.set);
   const signOut = useAuthStore((s) => s.signOut);
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
+  const [rating, setRating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -55,18 +56,14 @@ export default function Settings() {
         <ListRow
           title="Help & FAQ"
           icon="help-circle-outline"
-          onPress={() => setComingSoon('Help & FAQ')}
+          onPress={() => router.push('/settings/help')}
         />
         <ListRow
           title="Send feedback"
           icon="chatbubbles-outline"
-          onPress={() => setComingSoon('Send feedback')}
+          onPress={() => router.push('/settings/feedback')}
         />
-        <ListRow
-          title="Rate Nudge"
-          icon="star-outline"
-          onPress={() => setComingSoon('Rate Nudge')}
-        />
+        <ListRow title="Rate Nudge" icon="star-outline" onPress={() => setRating(true)} />
       </SectionCard>
 
       <SectionCard title="Account">
@@ -78,7 +75,13 @@ export default function Settings() {
         />
       </SectionCard>
 
-      <ComingSoonDialog feature={comingSoon} onClose={() => setComingSoon(null)} />
+      <RateDialog
+        visible={rating}
+        onClose={() => setRating(false)}
+        onSubmit={(stars) =>
+          toast.success(stars >= 4 ? 'Thanks for the love! 💜' : 'Thanks, we’ll keep improving.')
+        }
+      />
       <ConfirmDialog
         visible={confirmDelete}
         title="Delete your account?"

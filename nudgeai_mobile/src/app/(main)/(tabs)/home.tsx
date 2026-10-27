@@ -5,7 +5,7 @@ import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
 import { Button, EmptyState, Screen, Text } from '@/components/ui';
 import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { HabitList } from '@/features/habits/components/HabitList';
-import { completedCount } from '@/features/habits/utils';
+import { allDoneToday, completedCount } from '@/features/habits/utils';
 import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ListSection } from '@/features/home/components/ListSection';
@@ -14,14 +14,14 @@ import { ProgressCard } from '@/features/home/components/ProgressCard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskSheet } from '@/features/tasks/components/TaskSheet';
 import { doneCount, isForToday } from '@/features/tasks/utils';
+import { unreadCount } from '@/features/notifications/utils';
 import { useNow } from '@/hooks/useNow';
 import { greeting } from '@/lib/format';
 import { displayName, useAuthStore } from '@/store/useAuthStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
+import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors } from '@/theme';
-
-const UNREAD_NUDGES = 3;
 
 export default function Home() {
   const clearance = useTabBarClearance();
@@ -29,6 +29,7 @@ export default function Home() {
   const habits = useHabitsStore((s) => s.habits);
   const streak = useHabitsStore((s) => s.streak);
   const tasks = useTasksStore((s) => s.tasks);
+  const unread = useNotificationsStore((s) => unreadCount(s.items));
   const [habitSheet, setHabitSheet] = useState(false);
   const [taskSheet, setTaskSheet] = useState(false);
 
@@ -37,8 +38,9 @@ export default function Home() {
   const todayTasks = tasks
     .filter((t) => isForToday(t, now))
     .sort((a, b) => Number(b.done) - Number(a.done));
-  const message =
-    streak > 0
+  const message = allDoneToday(habits)
+    ? `All habits done today, ${name}. Amazing work! 🎉`
+    : streak > 0
       ? `Deep work in 10 mins. You’re on a ${streak}-day streak. Keep going ${name}.`
       : `Let’s start your first streak today, ${name}.`;
 
@@ -50,11 +52,7 @@ export default function Home() {
       contentStyle={styles.content}
       overlay={<AskNudgeButton bottom={clearance - 8} expanded={isEmpty} />}
     >
-      <HomeHeader
-        greeting={greeting(name, now)}
-        streak={streak}
-        unread={isEmpty ? 0 : UNREAD_NUDGES}
-      />
+      <HomeHeader greeting={greeting(name, now)} streak={streak} unread={unread} />
 
       {isEmpty ? (
         <View style={styles.empty}>

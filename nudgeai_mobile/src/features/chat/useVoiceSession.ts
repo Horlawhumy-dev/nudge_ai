@@ -19,7 +19,7 @@ const SETTLE_MS = 700;
 const TRANSCRIBE_MS = 700;
 
 export function useVoiceSession() {
-  const sendVoice = useChatStore((s) => s.sendVoice);
+  const send = useChatStore((s) => s.send);
   const [phase, setPhase] = useState<VoicePhase>('listening');
   const [revealed, setRevealed] = useState(0);
   const [turn, setTurn] = useState(0);
@@ -31,10 +31,10 @@ export function useVoiceSession() {
       setPhase('transcribing');
       await new Promise((r) => setTimeout(r, TRANSCRIBE_MS));
       setPhase('generating');
-      await sendVoice(text);
+      await send(text, { via: 'voice' });
       setPhase('idle');
     },
-    [sendVoice]
+    [send]
   );
 
   // Reveal the script word by word while listening; auto-finish once it's all been "heard".

@@ -2,31 +2,31 @@ import { useRouter } from 'expo-router';
 import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
-import { AiOrb, Icon, Screen, Text } from '@/components/ui';
+import { AiOrb, EmptyState, Icon, Screen, Text } from '@/components/ui';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
-import type { ConversationSummary } from '@/features/chat/types';
+import type { Conversation } from '@/features/chat/types';
+import {
+  conversationMode,
+  conversationTitle,
+  formatTime,
+  groupConversations,
+} from '@/features/chat/utils';
+import { useNow } from '@/hooks/useNow';
+import { haptics } from '@/lib/haptics';
 import { useChatStore } from '@/store/useChatStore';
+import { toast } from '@/store/useToastStore';
 import { colors, radius } from '@/theme';
-
-function groupByDay(items: readonly ConversationSummary[]) {
-  const groups: { title: string; data: ConversationSummary[] }[] = [];
-  for (const item of items) {
-    const group = groups.find((g) => g.title === item.group);
-    if (group) group.data.push(item);
-    else groups.push({ title: item.group, data: [item] });
-  }
-  return groups;
-}
 
 function ConversationRow({
   item,
   onDelete,
   onOpen,
 }: {
-  item: ConversationSummary;
+  item: Conversation;
   onDelete: () => void;
   onOpen: () => void;
 }) {
+  const count = item.messages.length;
   return (
     <ReanimatedSwipeable
       overshootRight={false}
@@ -34,7 +34,7 @@ function ConversationRow({
       renderRightActions={() => (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Delete ${item.title}`}
+          accessibilityLabel={`Delete ${conversationTitle(item)}`}
           onPress={onDelete}
           style={styles.delete}
         >
@@ -47,14 +47,14 @@ function ConversationRow({
         <View style={styles.texts}>
           <View style={styles.titleRow}>
             <Text variant="subheading" numberOfLines={2} style={styles.title}>
-              {item.title}
+              {conversationTitle(item)}
             </Text>
             <Text variant="body" color={colors.textSecondary}>
-              {item.time}
+              {formatTime(item.createdAt)}
             </Text>
           </View>
           <Text variant="body" color={colors.textSecondary}>
-            {item.messageCount} {item.messageCount === 1 ? 'message' : 'messages'} • {item.mode}
+            {count} {count === 1 ? 'message' : 'messages'} • {conversationMode(item)}
           </Text>
         </View>
       </Pressable>
@@ -64,17 +64,46 @@ function ConversationRow({
 
 export default function ChatHistory() {
   const router = useRouter();
+  const now = useNow();
   const conversations = useChatStore((s) => s.conversations);
+  const openConversation = useChatStore((s) => s.openConversation);
+  const startNew = useChatStore((s) => s.startNew);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
+
+  const sections = groupConversations(conversations, now).map((g) => ({
+    title: g.title,
+    data: g.items,
+  }));
+
+  const remove = (item: Conversation) => {
+    haptics.warning();
+    deleteConversation(item.id);
+    toast.show('Conversation deleted', {
+      action: {
+        label: 'Undo',
+        onPress: () =>
+          useChatStore.setState((s) => ({ conversations: [...s.conversations, item] })),
+      },
+    });
+  };
 
   return (
     <Screen background={colors.background}>
       <ChatHeader
         title="Chat History"
-        right={{ icon: 'options-outline', label: 'Filter', onPress: () => undefined }}
+        right={[
+          {
+            icon: 'create-outline',
+            label: 'New chat',
+            onPress: () => {
+              startNew();
+              router.navigate('/chat');
+            },
+          },
+        ]}
       />
       <SectionList
-        sections={groupByDay(conversations)}
+        sections={sections}
         keyExtractor={(c) => c.id}
         renderSectionHeader={({ section }) => (
           <Text variant="bodyLarge" color={colors.textSecondary} style={styles.section}>
@@ -84,20 +113,27 @@ export default function ChatHistory() {
         renderItem={({ item }) => (
           <ConversationRow
             item={item}
-            onDelete={() => deleteConversation(item.id)}
-            onOpen={() => router.push('/chat')}
+            onDelete={() => remove(item)}
+            onOpen={() => {
+              openConversation(item.id);
+              router.navigate('/chat');
+            }}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         ListEmptyComponent={
-          <Text
-            variant="bodyLarge"
-            color={colors.textSecondary}
-            align="center"
-            style={styles.empty}
-          >
-            No conversations yet.
-          </Text>
+          <View style={styles.empty}>
+            <EmptyState
+              icon="chatbubbles-outline"
+              title="No conversations yet"
+              message="Ask Nudge AI to summarise your day or reschedule a task and it will show up here."
+              actionLabel="Start a chat"
+              onAction={() => {
+                startNew();
+                router.navigate('/chat');
+              }}
+            />
+          </View>
         }
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
@@ -108,7 +144,7 @@ export default function ChatHistory() {
 }
 
 const styles = StyleSheet.create({
-  list: { paddingBottom: 24 },
+  list: { paddingBottom: 24, flexGrow: 1 },
   section: { marginTop: 22, marginBottom: 12 },
   card: {
     flexDirection: 'row',

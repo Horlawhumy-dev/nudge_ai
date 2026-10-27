@@ -47,6 +47,14 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#A855F7"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nudge uses your photos so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

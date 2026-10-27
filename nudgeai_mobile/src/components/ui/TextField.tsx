@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import {
   Platform,
   Pressable,
@@ -23,6 +23,8 @@ type TextFieldProps = Omit<TextInputProps, 'style'> & {
   secure?: boolean;
   /** Icon or control shown at the right edge (e.g. a calendar glyph). */
   trailing?: ReactNode;
+  /** Ref to the underlying TextInput, for moving focus between fields. */
+  inputRef?: Ref<TextInput>;
   /** `pill` is the auth/onboarding look; `filled` is the sheet look. */
   appearance?: 'pill' | 'filled';
   containerStyle?: StyleProp<ViewStyle>;
@@ -34,6 +36,7 @@ export function TextField({
   hint,
   secure = false,
   trailing,
+  inputRef,
   appearance = 'pill',
   multiline,
   containerStyle,
@@ -66,6 +69,7 @@ export function TextField({
       >
         <TextInput
           {...inputProps}
+          ref={inputRef}
           multiline={multiline}
           secureTextEntry={secure && !revealed}
           placeholderTextColor={colors.textPlaceholder}

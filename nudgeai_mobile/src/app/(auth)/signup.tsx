@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, OrDivider, Screen, SocialButtons, TextField } from '@/components/ui';
 import { AuthHeader } from '@/features/auth/components/AuthHeader';
+import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
 import { LinkText } from '@/features/auth/components/LinkText';
 import { isStrongPassword, isValidEmail } from '@/lib/validation';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -15,8 +16,10 @@ export default function SignUp() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [touched, setTouched] = useState({ email: false, password: false });
+  const [touched, setTouched] = useState({ email: false });
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const emailValid = isValidEmail(email);
   const passwordValid = isStrongPassword(password);
@@ -48,6 +51,9 @@ export default function SignUp() {
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
+          blurOnSubmit={false}
         />
         <TextField
           label="Email address"
@@ -60,23 +66,27 @@ export default function SignUp() {
           autoCapitalize="none"
           autoComplete="email"
           textContentType="emailAddress"
+          inputRef={emailRef}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
         />
-        <TextField
-          label="Password"
-          placeholder="Create password"
-          value={password}
-          onChangeText={setPassword}
-          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-          error={
-            touched.password && password && !passwordValid
-              ? 'Min 8 characters, 1 special character, caps, number.'
-              : undefined
-          }
-          secure
-          autoCapitalize="none"
-          autoComplete="new-password"
-          textContentType="newPassword"
-        />
+        <View>
+          <TextField
+            label="Password"
+            placeholder="Create password"
+            value={password}
+            onChangeText={setPassword}
+            secure
+            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            inputRef={passwordRef}
+            returnKeyType="go"
+            onSubmitEditing={submit}
+          />
+          <PasswordChecklist password={password} />
+        </View>
       </View>
       <Button
         label="Create account"

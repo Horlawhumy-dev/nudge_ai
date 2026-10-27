@@ -7,7 +7,7 @@ import { MessageBubble } from '@/features/chat/components/MessageBubble';
 import { PulsingOrb } from '@/features/chat/components/PulsingOrb';
 import { VoiceDock } from '@/features/chat/components/VoiceDock';
 import { useVoiceSession, type VoicePhase } from '@/features/chat/useVoiceSession';
-import { useChatStore } from '@/store/useChatStore';
+import { selectMessages, useChatStore } from '@/store/useChatStore';
 import { colors, radius, shadows } from '@/theme';
 
 const STATUS: Record<VoicePhase, string> = {
@@ -20,12 +20,12 @@ const STATUS: Record<VoicePhase, string> = {
 
 export default function Voice() {
   const router = useRouter();
-  const messages = useChatStore((s) => s.messages);
-  const clear = useChatStore((s) => s.clear);
+  const messages = useChatStore(selectMessages);
+  const startNew = useChatStore((s) => s.startNew);
   const { phase, transcript, toggleMic, togglePause } = useVoiceSession();
 
   const live = phase === 'listening' || phase === 'paused';
-  const showOrb = live;
+  const showOrb = live || messages.length === 0;
   const busy = phase === 'transcribing' || phase === 'generating';
 
   return (
@@ -45,7 +45,7 @@ export default function Voice() {
                     label: phase === 'paused' ? 'Resume' : 'Pause',
                     onPress: togglePause,
                   }
-                : { icon: 'trash-outline', label: 'Clear conversation', onPress: clear }
+                : { icon: 'add', label: 'Start a new conversation', onPress: startNew }
             }
             right={{ icon: 'close', label: 'Close voice mode', onPress: () => router.back() }}
           />
@@ -55,11 +55,13 @@ export default function Voice() {
       <ChatHeader
         title="Nudge voice"
         showOrb={false}
-        right={{
-          icon: 'time-outline',
-          label: 'Chat history',
-          onPress: () => router.push('/chat/history'),
-        }}
+        right={[
+          {
+            icon: 'time-outline',
+            label: 'Chat history',
+            onPress: () => router.push('/chat/history'),
+          },
+        ]}
       />
 
       {showOrb ? (

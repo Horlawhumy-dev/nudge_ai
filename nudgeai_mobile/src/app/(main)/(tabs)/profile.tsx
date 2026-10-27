@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
 import {
   AiOrb,
-  Avatar,
   ConfirmDialog,
   GradientCard,
   Icon,
@@ -15,7 +14,7 @@ import {
   SectionCard,
   Text,
 } from '@/components/ui';
-import { ComingSoonDialog } from '@/features/settings/components/ComingSoonDialog';
+import { UserAvatar } from '@/features/auth/components/UserAvatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { colors, radius } from '@/theme';
@@ -27,7 +26,6 @@ export default function Profile() {
   const signOut = useAuthStore((s) => s.signOut);
   const plan = usePreferencesStore((s) => s.plan);
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
   const planLabel = plan === 'pro' ? 'Pro' : 'Free';
 
   const logOut = () => {
@@ -59,7 +57,7 @@ export default function Profile() {
       />
 
       <View style={styles.identity}>
-        <Avatar size={72} />
+        <UserAvatar size={72} />
         <View style={styles.identityTexts}>
           <Text variant="heading">{user?.name}</Text>
           <Text variant="bodyLarge" color={colors.textSecondary} numberOfLines={1}>
@@ -103,7 +101,7 @@ export default function Profile() {
         <ListRow
           title="Privacy & Security"
           icon="lock-closed-outline"
-          onPress={() => setComingSoon('Privacy & Security')}
+          onPress={() => router.push('/settings/privacy')}
         />
         <ListRow
           title="Subscription"
@@ -136,7 +134,6 @@ export default function Profile() {
         onCancel={() => setConfirmLogout(false)}
         onConfirm={logOut}
       />
-      <ComingSoonDialog feature={comingSoon} onClose={() => setComingSoon(null)} />
     </Screen>
   );
 }

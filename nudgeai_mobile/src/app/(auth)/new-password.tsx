@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { BackButton, Button, Screen, Text, TextField } from '@/components/ui';
+import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
 import { isStrongPassword } from '@/lib/validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { colors } from '@/theme';
@@ -34,15 +35,18 @@ export default function NewPassword() {
         </Text>
       </View>
       <View style={styles.fields}>
-        <TextField
-          label="Password"
-          placeholder="Enter password"
-          value={password}
-          onChangeText={setPassword}
-          secure
-          autoCapitalize="none"
-          textContentType="newPassword"
-        />
+        <View>
+          <TextField
+            label="Password"
+            placeholder="Enter password"
+            value={password}
+            onChangeText={setPassword}
+            secure
+            autoCapitalize="none"
+            textContentType="newPassword"
+          />
+          <PasswordChecklist password={password} />
+        </View>
         <TextField
           label="Confirm password"
           placeholder="Confirm password"
@@ -52,7 +56,6 @@ export default function NewPassword() {
           autoCapitalize="none"
           textContentType="newPassword"
           error={mismatch ? 'Passwords don’t match' : undefined}
-          hint="Min 8 characters, 1 special character, caps, number."
         />
       </View>
       <Button

@@ -20,7 +20,7 @@ export default function StepTone() {
     });
     // The full name stays as signed up; the onboarding name is what reminders call the user.
     useAuthStore.getState().completeOnboarding(firstName(name));
-    router.replace('/onboarding/ready');
+    router.replace('/onboarding/notifications');
   };
 
   return (

@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
-import { Avatar, Icon, Text } from '@/components/ui';
+import { Icon, Text } from '@/components/ui';
+import { UserAvatar } from '@/features/auth/components/UserAvatar';
 import { colors } from '@/theme';
 
 type HomeHeaderProps = {
@@ -20,7 +21,7 @@ export function HomeHeader({ greeting, streak, unread }: HomeHeaderProps) {
         accessibilityLabel="Open profile"
         onPress={() => router.navigate('/profile')}
       >
-        <Avatar size={48} />
+        <UserAvatar size={48} />
       </Pressable>
       <View style={styles.texts}>
         <Text variant="heading" style={styles.greeting} numberOfLines={1}>
@@ -39,7 +40,7 @@ export function HomeHeader({ greeting, streak, unread }: HomeHeaderProps) {
         accessibilityRole="button"
         accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         hitSlop={10}
-        onPress={() => router.push('/settings/notifications')}
+        onPress={() => router.push('/notifications')}
       >
         <Icon name="notifications-outline" size={28} color={colors.textSecondary} />
         {unread > 0 ? (

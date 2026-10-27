@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, OrDivider, Screen, SocialButtons, TextField } from '@/components/ui';
 import { AuthHeader } from '@/features/auth/components/AuthHeader';
@@ -15,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
 
   const emailError = submitted && !isValidEmail(email) ? 'Enter a valid email address' : undefined;
   const passwordError = submitted && !password ? 'Enter your password' : undefined;
@@ -47,6 +48,9 @@ export default function Login() {
           autoCapitalize="none"
           autoComplete="email"
           textContentType="emailAddress"
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
         />
         <TextField
           label="Password"
@@ -58,6 +62,8 @@ export default function Login() {
           autoCapitalize="none"
           autoComplete="current-password"
           textContentType="password"
+          inputRef={passwordRef}
+          returnKeyType="go"
           onSubmitEditing={submit}
         />
         <LinkText

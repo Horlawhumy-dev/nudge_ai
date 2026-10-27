@@ -9,13 +9,14 @@ import { MessageBubble } from '@/features/chat/components/MessageBubble';
 import { QuickPrompts } from '@/features/chat/components/QuickPrompts';
 import { TypingIndicator } from '@/features/chat/components/TypingIndicator';
 import { displayName, useAuthStore } from '@/store/useAuthStore';
-import { useChatStore } from '@/store/useChatStore';
+import { selectMessages, useChatStore } from '@/store/useChatStore';
 import { colors, fonts } from '@/theme';
 
 export default function Chat() {
   const router = useRouter();
   const name = useAuthStore((s) => displayName(s.user));
-  const messages = useChatStore((s) => s.messages);
+  const messages = useChatStore(selectMessages);
+  const startNew = useChatStore((s) => s.startNew);
   const isReplying = useChatStore((s) => s.isReplying);
   const send = useChatStore((s) => s.send);
   const [draft, setDraft] = useState('');
@@ -37,7 +38,7 @@ export default function Chat() {
       footer={
         <View style={styles.footer}>
           {messages.length === 0 ? (
-            <QuickPrompts onSelect={(p) => void send(p.label, p.emoji)} />
+            <QuickPrompts onSelect={(p) => void send(p.label, { promptEmoji: p.emoji })} />
           ) : null}
           <ChatInput
             value={draft}
@@ -51,11 +52,16 @@ export default function Chat() {
     >
       <ChatHeader
         title="Nudge AI"
-        right={{
-          icon: 'time-outline',
-          label: 'Chat history',
-          onPress: () => router.push('/chat/history'),
-        }}
+        right={[
+          ...(messages.length > 0
+            ? [{ icon: 'create-outline' as const, label: 'New chat', onPress: startNew }]
+            : []),
+          {
+            icon: 'time-outline',
+            label: 'Chat history',
+            onPress: () => router.push('/chat/history'),
+          },
+        ]}
       />
 
       {messages.length === 0 ? (

@@ -7,9 +7,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ToastHost } from '@/components/ui';
 import { useAppFonts } from '@/hooks/useAppFonts';
+import { configureNotifications } from '@/services/notifications';
 import { colors } from '@/theme';
 
 void SplashScreen.preventAutoHideAsync();
+configureNotifications();
 
 export default function RootLayout() {
   const { ready } = useAppFonts();

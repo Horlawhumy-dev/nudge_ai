@@ -6,6 +6,7 @@ import { BackButton, Button, OtpInput, Screen, Text } from '@/components/ui';
 import { useCountdown } from '@/hooks/useCountdown';
 import { formatCountdown } from '@/lib/format';
 import { useAuthStore } from '@/store/useAuthStore';
+import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
 const CODE_LENGTH = 4;
@@ -21,14 +22,14 @@ export default function Verify() {
   const [loading, setLoading] = useState(false);
   const { remaining, isDone, restart } = useCountdown(RESEND_SECONDS);
 
-  const submit = async () => {
-    if (code.length < CODE_LENGTH) return;
+  const submit = async (value: string = code) => {
+    if (value.length < CODE_LENGTH || loading) return;
     setLoading(true);
     if (flow === 'reset') {
       router.replace('/new-password');
       return;
     }
-    await verifyEmail(code);
+    await verifyEmail(value);
     router.replace('/verified');
   };
 
@@ -45,13 +46,30 @@ export default function Verify() {
         Enter the security code we just sent to {email}
       </Text>
       <View style={styles.otp}>
-        <OtpInput length={CODE_LENGTH} value={code} onChange={setCode} />
+        <OtpInput
+          length={CODE_LENGTH}
+          value={code}
+          onChange={(value) => {
+            setCode(value);
+            // Submit as soon as the last digit lands, like a native one-time-code flow.
+            if (value.length === CODE_LENGTH) void submit(value);
+          }}
+        />
       </View>
       <View style={styles.resend}>
         <Text variant="bodyLarge" color={colors.textSecondary}>
           Didn’t receive code?{' '}
         </Text>
-        <Pressable accessibilityRole="button" disabled={!isDone} onPress={restart} hitSlop={8}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!isDone}
+          onPress={() => {
+            restart();
+            setCode('');
+            toast.show(`New code sent to ${email}`);
+          }}
+          hitSlop={8}
+        >
           <Text variant="bodyLarge" color={colors.primary}>
             {isDone ? 'Resend' : `Resend - ${formatCountdown(remaining)}`}
           </Text>
@@ -59,7 +77,7 @@ export default function Verify() {
       </View>
       <Button
         label="Verify"
-        onPress={submit}
+        onPress={() => void submit()}
         disabled={code.length < CODE_LENGTH}
         loading={loading}
         style={styles.cta}
