@@ -97,7 +97,7 @@ export default function ChatHistory() {
             label: 'New chat',
             onPress: () => {
               startNew();
-              router.navigate('/chat');
+              router.dismissTo('/chat');
             },
           },
         ]}
@@ -116,7 +116,7 @@ export default function ChatHistory() {
             onDelete={() => remove(item)}
             onOpen={() => {
               openConversation(item.id);
-              router.navigate('/chat');
+              router.dismissTo('/chat');
             }}
           />
         )}
@@ -130,7 +130,7 @@ export default function ChatHistory() {
               actionLabel="Start a chat"
               onAction={() => {
                 startNew();
-                router.navigate('/chat');
+                router.dismissTo('/chat');
               }}
             />
           </View>

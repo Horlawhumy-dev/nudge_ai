@@ -61,7 +61,8 @@ export function TaskRow({ task, onToggle, onPress }: TaskRowProps) {
 
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  texts: { flex: 1, gap: 4, paddingBottom: 2, paddingRight: 70 },
+  texts: { flex: 1, gap: 4, paddingBottom: 2 },
+  meta: { paddingRight: 84 },
   title: { fontSize: 17 },
   done: { textDecorationLine: 'line-through' },
   badge: { position: 'absolute', right: 14, bottom: 12 },
