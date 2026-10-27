@@ -155,4 +155,8 @@ per-million-token rates in `app/models/registry.py`.
 - The test suite forces the offline fake via an autouse fixture, so a stray
   `META_API_KEY` in your shell cannot make the suite spend money.
 -
-- **Live Meta validation (Gate 2b)**: pending. The Meta Model API and Baseten clients are hackathon work; this section will record the live probe results once they run.
+- **Live Meta validation (Gate 2b)**: pending. The Meta Model API and Baseten clients are hackathon work; this section will record the live probe results once they run. Probe with keys in `.env` (never in the suite):
+
+```bash
+uv run python scripts/probe_meta.py
+```
