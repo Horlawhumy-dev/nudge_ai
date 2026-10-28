@@ -8,6 +8,7 @@ import jwt
 import resend
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.security import (
@@ -326,4 +327,11 @@ async def reset_password(
 
 
 async def get_user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
-    return await session.get(User, user_id)
+    # Eager-load what request handlers read: lazy relationship access raises
+    # MissingGreenlet on an async session (every /preferences and /onboarding
+    # call touches these).
+    return await session.scalar(
+        select(User)
+        .options(selectinload(User.preferences), selectinload(User.onboarding))
+        .where(User.id == user_id)
+    )
