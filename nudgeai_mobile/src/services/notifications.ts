@@ -1,36 +1,71 @@
-import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
+import type * as NotificationsModule from 'expo-notifications';
 
 import type { PlannedReminder } from '@/features/reminders/plan';
 
+type NotificationsApi = typeof NotificationsModule;
+
 const CHANNEL_ID = 'habit-reminders';
-const supported = Platform.OS !== 'web';
+
+/**
+ * Whether this runtime can schedule reminders. Not on web, and not in Expo Go on Android,
+ * where expo-notifications throws (remote push was removed from Expo Go in SDK 53). A
+ * development build supports everything.
+ */
+export function remindersAvailable(): boolean {
+  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'android' && isRunningInExpoGo()) return false;
+  return true;
+}
+
+let cached: NotificationsApi | null | undefined;
+
+/** Loads expo-notifications on first use so merely importing this file never throws. */
+function load(): NotificationsApi | null {
+  if (cached !== undefined) return cached;
+  if (!remindersAvailable()) return (cached = null);
+  try {
+    // Deliberately lazy: a static import throws at startup in Android Expo Go.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cached = require('expo-notifications') as NotificationsApi;
+  } catch {
+    cached = null;
+  }
+  return cached;
+}
 
 /** Show reminders as banners while the app is open too. Call once at startup. */
 export function configureNotifications(): void {
-  if (!supported) return;
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
+  const N = load();
+  if (!N) return;
+  try {
+    N.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {
+    // unsupported runtime; reminders stay off
+  }
 }
 
-async function ensureChannel(): Promise<void> {
+async function ensureChannel(N: NotificationsApi): Promise<void> {
   if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+  await N.setNotificationChannelAsync(CHANNEL_ID, {
     name: 'Habit reminders',
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: N.AndroidImportance.HIGH,
   });
 }
 
 export async function hasReminderPermission(): Promise<boolean> {
-  if (!supported) return false;
+  const N = load();
+  if (!N) return false;
   try {
-    return (await Notifications.getPermissionsAsync()).granted;
+    return (await N.getPermissionsAsync()).granted;
   } catch {
     return false;
   }
@@ -38,19 +73,21 @@ export async function hasReminderPermission(): Promise<boolean> {
 
 /** Asks the OS for permission (Android needs the channel to exist first). */
 export async function requestReminderPermission(): Promise<boolean> {
-  if (!supported) return false;
+  const N = load();
+  if (!N) return false;
   try {
-    await ensureChannel();
-    return (await Notifications.requestPermissionsAsync()).granted;
+    await ensureChannel(N);
+    return (await N.requestPermissionsAsync()).granted;
   } catch {
     return false;
   }
 }
 
 export async function cancelReminders(): Promise<void> {
-  if (!supported) return;
+  const N = load();
+  if (!N) return;
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await N.cancelAllScheduledNotificationsAsync();
   } catch {
     // nothing scheduled, or the native module is unavailable
   }
@@ -58,17 +95,18 @@ export async function cancelReminders(): Promise<void> {
 
 /** Replaces every scheduled reminder with `plan` (daily repeats). */
 export async function scheduleReminders(plan: readonly PlannedReminder[]): Promise<void> {
-  if (!supported) return;
+  const N = load();
+  if (!N) return;
   try {
-    await ensureChannel();
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await ensureChannel(N);
+    await N.cancelAllScheduledNotificationsAsync();
     await Promise.all(
       plan.map((r) =>
-        Notifications.scheduleNotificationAsync({
+        N.scheduleNotificationAsync({
           identifier: `habit-${r.habitId}`,
           content: { title: r.title, body: r.body, data: { habitId: r.habitId } },
           trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            type: N.SchedulableTriggerInputTypes.DAILY,
             hour: r.time.hour,
             minute: r.time.minute,
             channelId: CHANNEL_ID,

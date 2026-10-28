@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 
 import { ConfirmDialog, ListRow, Screen, ScreenHeader, SectionCard, Text } from '@/components/ui';
-import { hasReminderPermission } from '@/services/notifications';
+import { hasReminderPermission, remindersAvailable } from '@/services/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useChatStore } from '@/store/useChatStore';
 import { toast } from '@/store/useToastStore';
@@ -45,11 +45,13 @@ export default function PrivacyAndSecurity() {
         <ListRow
           title="Notifications"
           subtitle={
-            allowed === null
-              ? 'Checking…'
-              : allowed
-                ? 'Allowed'
-                : 'Not allowed. Tap to open settings'
+            !remindersAvailable()
+              ? 'Not available in this environment'
+              : allowed === null
+                ? 'Checking…'
+                : allowed
+                  ? 'Allowed'
+                  : 'Not allowed. Tap to open settings'
           }
           icon="notifications-outline"
           onPress={() => void Linking.openSettings()}

@@ -4,7 +4,11 @@ import { Screen, ScreenHeader } from '@/components/ui';
 import { ToggleRow } from '@/features/settings/components/ToggleRow';
 import { usePreferencesStore, type NotificationKey } from '@/store/usePreferencesStore';
 import type { IconName } from '@/components/ui';
-import { hasReminderPermission, requestReminderPermission } from '@/services/notifications';
+import {
+  hasReminderPermission,
+  remindersAvailable,
+  requestReminderPermission,
+} from '@/services/notifications';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
@@ -48,6 +52,12 @@ export default function NotificationSettings() {
 
   /** Turning push on needs OS permission; if it's refused, leave the switch off and say why. */
   const change = async (key: NotificationKey, value: boolean) => {
+    if (key === 'push' && value && !remindersAvailable()) {
+      toast.show(
+        'Reminders aren’t available in this environment. A development build supports them.'
+      );
+      return;
+    }
     if (key === 'push' && value && !(await hasReminderPermission())) {
       if (!(await requestReminderPermission())) {
         toast.error('Notifications are blocked for Nudge.', {

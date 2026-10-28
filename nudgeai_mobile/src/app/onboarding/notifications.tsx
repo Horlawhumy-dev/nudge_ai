@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 
 import { AiOrb, Button, Screen, Text } from '@/components/ui';
-import { requestReminderPermission } from '@/services/notifications';
+import { remindersAvailable, requestReminderPermission } from '@/services/notifications';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { toast } from '@/store/useToastStore';
 import { colors, radius } from '@/theme';
@@ -21,6 +21,14 @@ export default function NotificationsStep() {
   const [loading, setLoading] = useState(false);
 
   const enable = async () => {
+    if (!remindersAvailable()) {
+      setNotification('push', false);
+      toast.show(
+        'Reminders aren’t available in this environment. A development build supports them.'
+      );
+      router.replace('/onboarding/ready');
+      return;
+    }
     setLoading(true);
     const granted = await requestReminderPermission();
     setNotification('push', granted);
