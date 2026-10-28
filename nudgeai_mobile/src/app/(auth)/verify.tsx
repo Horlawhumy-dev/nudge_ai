@@ -22,6 +22,9 @@ export default function Verify() {
   const { flow } = useLocalSearchParams<{ flow?: string }>();
   const email = useAuthStore((s) => s.pendingEmail ?? s.user?.email ?? '');
   const verifyEmail = useAuthStore((s) => s.verifyEmail);
+  const verifyResetCode = useAuthStore((s) => s.verifyResetCode);
+  const resendCode = useAuthStore((s) => s.resendCode);
+  const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,10 +40,10 @@ export default function Verify() {
     setError(null);
     setLoading(true);
     try {
-      // The reset flow checks the same demo code; only sign-up changes the session status.
+      // The reset flow checks the code now and keeps it for the next screen; only sign-up
+      // changes the session status.
       if (flow === 'reset') {
-        if (value !== DEMO_CODE)
-          throw new AuthError('That code isn’t right. Check it and try again.', 'code');
+        await verifyResetCode(value);
         haptics.success();
         router.replace('/new-password');
         return;
@@ -97,10 +100,21 @@ export default function Verify() {
           accessibilityRole="button"
           disabled={!isDone}
           onPress={() => {
-            restart();
             setCode('');
             setError(null);
-            toast.show(`New code sent to ${email}`);
+            const send = flow === 'reset' ? requestPasswordReset(email) : resendCode();
+            send.then(
+              () => {
+                restart();
+                toast.show(`New code sent to ${email}`);
+              },
+              (e: unknown) => {
+                if (e instanceof AuthError && /wait|Too many/i.test(e.message)) restart();
+                toast.show(
+                  e instanceof AuthError ? e.message : 'Couldn’t send a new code. Try again.'
+                );
+              }
+            );
           }}
           hitSlop={8}
         >

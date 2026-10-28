@@ -14,6 +14,21 @@ export const SLEEP_OPTIONS: readonly TimeOption[] = [
   { id: 'after-midnight', label: 'After midnight', emoji: '🌆' },
 ];
 
+/** The clock time each answer stands for, as the backend stores it (24 h `HH:MM`). */
+export const WAKE_TIMES: Record<string, string> = {
+  'before-6': '05:30',
+  '6-7': '06:30',
+  '7-8': '07:30',
+  'after-8': '08:30',
+};
+
+export const SLEEP_TIMES: Record<string, string> = {
+  'before-9': '20:30',
+  '9-1030': '22:00',
+  '1030-12': '23:15',
+  'after-midnight': '00:30',
+};
+
 export type Goal = { id: string; label: string; emoji: string };
 
 export const GOALS: readonly Goal[] = [

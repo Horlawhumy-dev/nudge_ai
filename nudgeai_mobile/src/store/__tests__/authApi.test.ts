@@ -1,0 +1,164 @@
+import { authApi } from '@/services/api/endpoints/auth';
+import { profileApi } from '@/services/api/endpoints/profile';
+import { ApiError } from '@/services/api/errors';
+
+import { AuthError, useAuthStore } from '../useAuthStore';
+import { useHabitsStore } from '../useHabitsStore';
+
+// Same store, but with a backend configured instead of demo mode.
+jest.mock('@/constants/env', () => ({
+  API_URL: 'http://api.test/v1',
+  DEMO_MODE: false,
+  DEMO_EMAIL: 'demo@nudge.ai',
+  DEMO_PASSWORD: 'Password1!',
+  DEMO_CODE: '1234',
+}));
+jest.mock('@/services/api/endpoints/auth');
+jest.mock('@/services/api/endpoints/profile');
+jest.mock('@/services/api/tokens', () => ({
+  getTokens: jest.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
+  onSessionExpired: jest.fn(),
+}));
+
+const auth = jest.mocked(authApi);
+const profile = jest.mocked(profileApi);
+
+const apiUser = {
+  id: 'u1',
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  timezone: 'UTC',
+  is_email_verified: true,
+  plan: 'free' as const,
+  avatar_url: null,
+  avatar_thumb_url: null,
+  pending_email: null,
+  created_at: '2026-01-01T00:00:00Z',
+};
+const onboarding = (completed: boolean) => ({
+  name: 'Ada',
+  wake_time: '07:30',
+  sleep_time: '23:00',
+  goals: [],
+  nudge_style: 'gentle',
+  completed,
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  auth.resendCode.mockResolvedValue(undefined);
+  useAuthStore.setState({ status: 'signedOut', user: null, pendingEmail: null, resetCode: null });
+  useHabitsStore.getState().clear();
+});
+
+describe('auth store with a backend', () => {
+  it('signs in and lands in the app when onboarding is done', async () => {
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockResolvedValue(onboarding(true));
+    await useAuthStore.getState().signIn(' ada@example.com ', 'Passw0rd!');
+    expect(auth.logIn).toHaveBeenCalledWith({ email: 'ada@example.com', password: 'Passw0rd!' });
+    const s = useAuthStore.getState();
+    expect(s.status).toBe('ready');
+    expect(s.user).toMatchObject({ id: 'u1', name: 'Ada Lovelace', nickname: 'Ada' });
+  });
+
+  it('sends a returning user who never finished onboarding back to it', async () => {
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockResolvedValue(onboarding(false));
+    await useAuthStore.getState().signIn('ada@example.com', 'Passw0rd!');
+    expect(useAuthStore.getState().status).toBe('onboarding');
+  });
+
+  it('shows the server’s message for a wrong password', async () => {
+    auth.logIn.mockRejectedValue(new ApiError('incorrect email or password', 401));
+    await expect(useAuthStore.getState().signIn('a@b.co', 'x')).rejects.toThrow(
+      'incorrect email or password'
+    );
+    expect(useAuthStore.getState().status).toBe('signedOut');
+  });
+
+  it('resumes email verification when the account was never confirmed', async () => {
+    auth.logIn.mockRejectedValue(new ApiError('verify your email first', 403));
+    await expect(useAuthStore.getState().signIn('ada@example.com', 'x')).rejects.toBeInstanceOf(
+      AuthError
+    );
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'unverified',
+      pendingEmail: 'ada@example.com',
+    });
+    expect(auth.resendCode).toHaveBeenCalledWith('ada@example.com');
+  });
+
+  it('blames the email field when sign-up says it is taken', async () => {
+    auth.signUp.mockRejectedValue(new ApiError('email already registered', 409));
+    const err = await useAuthStore
+      .getState()
+      .signUp('Ada', 'ada@example.com', 'Passw0rd!')
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ name: 'AuthError', field: 'email' });
+  });
+
+  it('signs up, verifies with the emailed code and moves on to onboarding', async () => {
+    auth.signUp.mockResolvedValue(apiUser);
+    await useAuthStore.getState().signUp('Ada Lovelace', 'ada@example.com', 'Passw0rd!');
+    expect(auth.signUp).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'ada@example.com', name: 'Ada Lovelace' })
+    );
+    expect(useAuthStore.getState().status).toBe('unverified');
+
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockResolvedValue(onboarding(false));
+    await useAuthStore.getState().verifyEmail('4821');
+    expect(auth.verifyEmail).toHaveBeenCalledWith({ email: 'ada@example.com', code: '4821' });
+    expect(useAuthStore.getState().status).toBe('onboarding');
+  });
+
+  it('blames the code field for a wrong code', async () => {
+    useAuthStore.setState({ pendingEmail: 'ada@example.com' });
+    auth.verifyEmail.mockRejectedValue(new ApiError('invalid or expired code', 400));
+    await expect(useAuthStore.getState().verifyEmail('0000')).rejects.toMatchObject({
+      field: 'code',
+    });
+  });
+
+  it('explains rate limiting with the wait time', async () => {
+    useAuthStore.setState({ pendingEmail: 'ada@example.com' });
+    auth.verifyEmail.mockRejectedValue(new ApiError('too many', 429, {}, 30));
+    await expect(useAuthStore.getState().verifyEmail('0000')).rejects.toThrow(/30s/);
+  });
+
+  it('carries the verified reset code through to the new password', async () => {
+    await useAuthStore.getState().requestPasswordReset('ada@example.com');
+    await useAuthStore.getState().verifyResetCode('9911');
+    await useAuthStore.getState().resetPassword('N3wPassw0rd!');
+    expect(auth.resetPassword).toHaveBeenCalledWith({
+      email: 'ada@example.com',
+      code: '9911',
+      new_password: 'N3wPassw0rd!',
+    });
+    expect(useAuthStore.getState().resetCode).toBeNull();
+  });
+
+  it('signs out on the server and wipes the account’s local data', async () => {
+    useAuthStore.setState({ status: 'ready' });
+    useHabitsStore.getState().addHabit({
+      name: 'Read',
+      emoji: '📚',
+      category: 'Learning',
+      timeOfDay: 'Evening',
+      frequency: 'Daily',
+    });
+    await useAuthStore.getState().signOut();
+    expect(auth.logOut).toHaveBeenCalled();
+    expect(useAuthStore.getState().status).toBe('signedOut');
+    expect(useHabitsStore.getState().habits).toEqual([]);
+  });
+
+  it('keeps a saved session when the app starts offline', async () => {
+    useAuthStore.setState({ status: 'ready', user: { id: 'u1', name: 'Ada', email: 'a@b.co' } });
+    profile.get.mockRejectedValue(new ApiError('offline', 0));
+    profile.getOnboarding.mockRejectedValue(new ApiError('offline', 0));
+    await useAuthStore.getState().restoreSession();
+    expect(useAuthStore.getState().status).toBe('ready');
+  });
+});

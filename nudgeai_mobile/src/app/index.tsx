@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { colors, fonts } from '@/theme';
 
 const SPLASH_MS = 2400;
+const RESTORE_TIMEOUT_MS = 5000;
 
 /**
  * Splash: the logo springs in over the brand colour while soft rings pulse behind it, then routes by
@@ -42,7 +43,11 @@ export default function Splash() {
   useEffect(() => {
     let cancelled = false;
     // Hold the splash for a beat and until saved state has loaded, so we route on real data.
-    void Promise.all([whenHydrated(), sleep(SPLASH_MS)]).then(() => {
+    // A signed-in user is re-checked with the server, but never kept waiting on a slow network.
+    const restore = whenHydrated().then(() =>
+      Promise.race([useAuthStore.getState().restoreSession(), sleep(RESTORE_TIMEOUT_MS)])
+    );
+    void Promise.all([restore, sleep(SPLASH_MS)]).then(() => {
       if (cancelled) return;
       const { status, hasSeenIntro } = useAuthStore.getState();
       if (status === 'ready') router.replace('/home');
