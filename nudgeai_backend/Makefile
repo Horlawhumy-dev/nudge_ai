@@ -1,8 +1,11 @@
+# Bind address. Use `make run HOST=0.0.0.0` so a phone on your Wi-Fi can reach the API.
+HOST ?= 127.0.0.1
+
 .PHONY: run worker worker-once test lint format mypy check db-migrate clean-env help
 
 ## Run the development server
 run:
-	.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8079
+	.venv/bin/uvicorn app.main:app --host $(HOST) --port 8079
 
 ## Run the nudge worker loop
 worker:
