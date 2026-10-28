@@ -15,7 +15,7 @@ export function PriorityBadge({ priority }: { priority: TaskPriority }) {
   const tone = TONES[priority];
   return (
     <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-      <Text variant="bodyLarge" color={tone.fg}>
+      <Text variant="caption" color={tone.fg} style={styles.label}>
         {priority}
       </Text>
     </View>
@@ -30,10 +30,11 @@ export const priorityDotColor: Record<TaskPriority, string> = {
 
 const styles = StyleSheet.create({
   badge: {
-    height: 34,
-    paddingHorizontal: 16,
+    height: 20,
+    paddingHorizontal: 8,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  label: { fontSize: 11, lineHeight: 14 },
 });
