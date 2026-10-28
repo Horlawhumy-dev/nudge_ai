@@ -11,19 +11,8 @@ import { InsightCard } from '@/features/progress/components/InsightCard';
 import { PeriodPill } from '@/features/progress/components/PeriodPill';
 import { RankRow } from '@/features/progress/components/RankRow';
 import { StatCard } from '@/features/progress/components/StatCard';
-import {
-  buildConsistencyMap,
-  habitBars,
-  habitInsight,
-  habitOverview,
-  overdueTasks,
-  taskBars,
-  taskInsight,
-  taskOverview,
-  topHabits,
-  topTaskGroups,
-} from '@/features/progress/data';
 import type { ProgressPeriod, ProgressTab } from '@/features/progress/types';
+import { useHabitProgress, useTaskProgress } from '@/features/progress/useProgress';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { colors, fonts } from '@/theme';
 
@@ -31,11 +20,6 @@ const TABS = [
   { key: 'habits', label: 'Habits' },
   { key: 'tasks', label: 'Tasks' },
 ] as const;
-
-function monthMap(today: Date) {
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  return buildConsistencyMap(daysInMonth, today.getDate() - 1);
-}
 
 export default function Progress() {
   const router = useRouter();
@@ -45,6 +29,11 @@ export default function Progress() {
   const [period, setPeriod] = useState<ProgressPeriod>('Weekly');
   const span = period === 'Weekly' ? 'week' : 'month';
   const today = new Date();
+  const habitsView = useHabitProgress(period, today, tab === 'habits');
+  const tasksView = useTaskProgress(period, tab === 'tasks');
+  const habit = habitsView.data;
+  const task = tasksView.data;
+  const view = tab === 'habits' ? habitsView : tasksView;
 
   return (
     <Screen
@@ -71,10 +60,17 @@ export default function Progress() {
       />
       <UnderlineTabs tabs={TABS} value={tab} onChange={setTab} />
 
-      {!hasData ? (
+      {view.sample && !hasData ? (
         <Card style={styles.sample}>
           <Text variant="body" color={colors.textSecondary} align="center">
             Sample data. Your own progress appears here once you complete habits and tasks.
+          </Text>
+        </Card>
+      ) : null}
+      {view.error ? (
+        <Card style={styles.sample}>
+          <Text variant="body" color={colors.textSecondary} align="center">
+            Couldn’t refresh your progress. Showing what we had.
           </Text>
         </Card>
       ) : null}
@@ -86,28 +82,38 @@ export default function Progress() {
         <PeriodPill value={period} onChange={setPeriod} />
       </View>
 
-      {tab === 'habits' ? (
+      {view.loading || !(tab === 'habits' ? habit : task) ? (
+        <Card style={styles.sample}>
+          <Text variant="body" color={colors.textSecondary} align="center">
+            {view.error
+              ? 'We couldn’t load your progress. Check your connection.'
+              : 'Loading your progress…'}
+          </Text>
+        </Card>
+      ) : tab === 'habits' && habit ? (
         <>
           <View style={styles.row}>
-            <StatCard prefix="🔥" value={String(habitOverview.streak)} label="Day streak" />
-            <StatCard value={`${habitOverview.consistency}%`} label="Consistency" />
-            <StatCard value={String(habitOverview.allTimeWins)} label="All time win" />
+            <StatCard prefix="🔥" value={String(habit.overview.streak)} label="Day streak" />
+            <StatCard value={`${habit.overview.consistency}%`} label="Consistency" />
+            <StatCard value={String(habit.overview.allTimeWins)} label="All time win" />
           </View>
           <Card padding={16} radiusSize="xl" style={styles.chart}>
             <Text variant="bodyLarge" color={colors.textSecondary}>
               Habits completed this {span}
             </Text>
-            <BarChart data={habitBars[period]} />
+            <BarChart data={habit.bars} />
           </Card>
-          <InsightCard
-            message={habitInsight}
-            prompt="Tell me more about my habit insights and how to improve."
-          />
+          {habit.insight ? (
+            <InsightCard
+              message={habit.insight}
+              prompt="Tell me more about my habit insights and how to improve."
+            />
+          ) : null}
           <Card padding={14} radiusSize="xl" style={styles.list}>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.listTitle}>
               Top performing habits
             </Text>
-            {topHabits.map((h) => (
+            {habit.topHabits.map((h) => (
               <RankRow
                 key={h.id}
                 emoji={h.emoji}
@@ -126,18 +132,18 @@ export default function Progress() {
               />
             ))}
           </Card>
-          <ConsistencyMap days={monthMap(today)} today={today} />
+          <ConsistencyMap days={habit.map} today={today} />
         </>
-      ) : (
+      ) : task ? (
         <>
           <View style={styles.row}>
-            <StatCard value={`${taskOverview.done}/${taskOverview.total}`} label="Tasks" />
-            <StatCard value={`${taskOverview.completionRate}%`} label="Completion rate" />
+            <StatCard value={`${task.overview.done}/${task.overview.total}`} label="Tasks" />
+            <StatCard value={`${task.overview.completionRate}%`} label="Completion rate" />
           </View>
           <View style={styles.row}>
-            <StatCard value={`${taskOverview.onTimeRate}%`} label="One-time rate" />
+            <StatCard value={`${task.overview.onTimeRate}%`} label="One-time rate" />
             <StatCard
-              value={String(taskOverview.overdue)}
+              value={String(task.overview.overdue)}
               label="Overdue"
               valueColor={colors.danger}
             />
@@ -146,13 +152,13 @@ export default function Progress() {
             <Text variant="bodyLarge" color={colors.textSecondary}>
               Tasks completed this {span}
             </Text>
-            <BarChart data={taskBars[period]} />
+            <BarChart data={task.bars} />
           </Card>
           <Card padding={14} radiusSize="xl" style={styles.list}>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.listTitle}>
               Top performing tasks
             </Text>
-            {topTaskGroups.map((g) => (
+            {task.groups.map((g) => (
               <RankRow
                 key={g.id}
                 emoji={g.emoji}
@@ -162,15 +168,17 @@ export default function Progress() {
               />
             ))}
           </Card>
-          <InsightCard
-            message={taskInsight}
-            prompt="Tell me more about my task insights and how to plan my day."
-          />
+          {task.insight ? (
+            <InsightCard
+              message={task.insight}
+              prompt="Tell me more about my task insights and how to plan my day."
+            />
+          ) : null}
           <Card padding={14} radiusSize="xl" style={styles.list}>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.listTitle}>
               Most overdue tasks
             </Text>
-            {overdueTasks.map((t) => (
+            {task.overdue.map((t) => (
               <RankRow
                 key={t.id}
                 icon={
@@ -197,7 +205,7 @@ export default function Progress() {
             ))}
           </Card>
         </>
-      )}
+      ) : null}
     </Screen>
   );
 }
