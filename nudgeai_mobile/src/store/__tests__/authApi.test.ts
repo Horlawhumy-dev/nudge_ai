@@ -15,6 +15,7 @@ jest.mock('@/constants/env', () => ({
 }));
 jest.mock('@/services/api/endpoints/auth');
 jest.mock('@/services/api/endpoints/profile');
+jest.mock('@/services/sync', () => ({ syncData: jest.fn(async () => undefined) }));
 jest.mock('@/services/api/tokens', () => ({
   getTokens: jest.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
   onSessionExpired: jest.fn(),

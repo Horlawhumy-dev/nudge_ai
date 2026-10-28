@@ -8,6 +8,7 @@ import { ApiError } from '@/services/api/errors';
 import { authApi } from '@/services/api/endpoints/auth';
 import { profileApi } from '@/services/api/endpoints/profile';
 import { getTokens, onSessionExpired } from '@/services/api/tokens';
+import { syncData } from '@/services/sync';
 import type { ApiUser } from '@/services/api/types';
 
 import { useHabitsStore } from './useHabitsStore';
@@ -134,6 +135,9 @@ async function loadAccount(set: SetAuth) {
     user: fromApi(account, onboarding.name ?? undefined),
     pendingEmail: null,
   });
+  // Bring the account's habits and tasks along. A hiccup here must not block signing in:
+  // the screens simply show what the phone already has.
+  await syncData().catch(() => undefined);
 }
 
 /**
