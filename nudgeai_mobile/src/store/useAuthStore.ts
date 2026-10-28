@@ -46,7 +46,9 @@ export type AuthField = 'email' | 'password' | 'code';
 export class AuthError extends Error {
   constructor(
     message: string,
-    readonly field?: AuthField
+    readonly field?: AuthField,
+    /** Seconds until the server will accept another try, when it said so. */
+    readonly retryAfter?: number
   ) {
     super(message);
     this.name = 'AuthError';
@@ -60,7 +62,7 @@ function authError(e: unknown, field?: AuthField): AuthError {
   if (e.isNetwork) return new AuthError(e.message);
   if (e.isRateLimited) {
     const wait = e.retryAfter ? ` Try again in ${e.retryAfter}s.` : ' Try again in a moment.';
-    return new AuthError(`Too many attempts.${wait}`, field);
+    return new AuthError(`Too many attempts.${wait}`, field, e.retryAfter);
   }
   const inField = (['email', 'password', 'code'] as const).find((f) => e.fields[f]);
   return new AuthError(e.message, inField ?? field);

@@ -61,7 +61,7 @@ export default function Verify() {
 
   return (
     <Screen scroll>
-      <BackButton />
+      <BackButton fallback={flow === 'reset' ? '/forgot-password' : '/signup'} />
       <View style={styles.header}>
         <Text variant="title">Verify your account</Text>
         <Text variant="bodyLarge" color={colors.textSecondary} style={styles.subtitle}>
@@ -102,15 +102,14 @@ export default function Verify() {
           onPress={() => {
             setCode('');
             setError(null);
+            restart(); // disable the button straight away so a double tap can't send twice
             const send = flow === 'reset' ? requestPasswordReset(email) : resendCode();
             send.then(
-              () => {
-                restart();
-                toast.show(`New code sent to ${email}`);
-              },
+              () => toast.success(`New code sent to ${email}`),
               (e: unknown) => {
-                if (e instanceof AuthError && /wait|Too many/i.test(e.message)) restart();
-                toast.show(
+                // Too soon: the server says how long to wait. Any other failure: let them retry now.
+                restart(e instanceof AuthError && e.retryAfter ? e.retryAfter : 0);
+                toast.error(
                   e instanceof AuthError ? e.message : 'Couldn’t send a new code. Try again.'
                 );
               }

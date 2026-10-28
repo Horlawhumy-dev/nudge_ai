@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { colors, shadows } from '@/theme';
@@ -9,15 +9,17 @@ type BackButtonProps = {
   onPress?: () => void;
   /** Frosted look used over the coloured intro slides. */
   translucent?: boolean;
+  /** Where to go when there is nothing to go back to (e.g. the screen was opened by the splash). */
+  fallback?: Href;
 };
 
-export function BackButton({ onPress, translucent = false }: BackButtonProps) {
+export function BackButton({ onPress, translucent = false, fallback = '/' }: BackButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Go back"
       hitSlop={8}
-      onPress={onPress ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))}
+      onPress={onPress ?? (() => (router.canGoBack() ? router.back() : router.replace(fallback)))}
       style={({ pressed }) => [
         styles.base,
         translucent ? styles.translucent : styles.solid,
