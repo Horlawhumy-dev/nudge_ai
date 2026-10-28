@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.db.models import Device, Nudge
+from app.db.models import Device, Nudge, Preference
 from app.infra import push
 from app.services.core_service import NotFound
 
@@ -112,9 +112,10 @@ async def create_notification(
     title: str,
     body: str,
     habit_id: UUID | None = None,
+    at: datetime | None = None,
 ) -> Nudge:
     """A delivered, non-engine message such as the welcome note or a weekly insight."""
-    now = datetime.now(UTC)
+    now = at or datetime.now(UTC)
     row = Nudge(
         user_id=user_id,
         habit_id=habit_id,
@@ -191,6 +192,9 @@ async def deliver(session: AsyncSession, user_id: UUID, nudge_ids: list[UUID]) -
     if not nudge_ids or not get_settings().push_delivery_enabled:
         return 0
     try:
+        prefs = await session.scalar(select(Preference).where(Preference.user_id == user_id))
+        if prefs is not None and not prefs.push_enabled:
+            return 0  # the user turned push off: the inbox still gets the message
         rows = list(
             await session.scalars(
                 select(Nudge).where(
