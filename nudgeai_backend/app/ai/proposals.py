@@ -58,6 +58,13 @@ async def create(
 ) -> ToolProposalRow:
     """Record a mutating call for later confirmation. Writes no user state."""
     summary = _summary(tool.spec.name, args)
+    # Tools that know their targets can word the confirm button ("Change “Deep work”: ...").
+    describe = getattr(tool.tool, "describe", None)
+    if callable(describe):
+        try:
+            summary = str(await describe(user_id, args, session))[:300] or summary
+        except Exception as exc:  # noqa: BLE001 - a wording failure must not lose the proposal
+            log.warning("proposal summary fell back for %s: %s", tool.spec.name, exc)
     await session.execute(
         pg_insert(ToolProposalRow)
         .values(
@@ -139,8 +146,16 @@ def _resolve(session: AsyncSession, user_id: UUID, row: ToolProposalRow) -> Any:
     """
     from app.tools import calendar as calendar_tools
     from app.tools import memory as memory_tools
+    from app.tools import planner as planner_tools
 
-    known = {t.name: t for t in (*memory_tools.default_tools(), *calendar_tools.default_tools())}
+    known = {
+        t.name: t
+        for t in (
+            *memory_tools.default_tools(),
+            *calendar_tools.default_tools(),
+            *planner_tools.default_tools(),
+        )
+    }
     factory = known.get(row.tool_name)
     if factory is None:
         log.error("proposal %s names an unknown tool %r", row.id, row.tool_name)

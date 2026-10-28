@@ -25,6 +25,7 @@ from app.services import conversation_service, memory_service
 from app.services.core_service import NotFound
 from app.tools import calendar as calendar_tools
 from app.tools import memory as memory_tools
+from app.tools import planner as planner_tools
 from app.tools.base import ToolRegistry
 from app.tools.executor import Executor, TurnResult
 
@@ -70,7 +71,11 @@ class HistoryOut(BaseModel):
 
 def _build_registry(user_id: UUID, session: Any) -> ToolRegistry:
     registry = ToolRegistry()
-    for factory in (*memory_tools.default_tools(), *calendar_tools.default_tools()):
+    for factory in (
+        *memory_tools.default_tools(),
+        *calendar_tools.default_tools(),
+        *planner_tools.default_tools(),
+    ):
         registry.register(factory(), user_id, session)
     return registry
 
