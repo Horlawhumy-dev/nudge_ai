@@ -99,7 +99,60 @@ class UserResponse(ORMModel):
     timezone: str
     is_email_verified: bool
     plan: str
+    avatar_url: str | None = None
+    pending_email: EmailStr | None = None
     created_at: datetime
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strong_enough(cls, v: str) -> str:
+        return _check_password(v)
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ConfirmEmailChangeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("name")
+    @classmethod
+    def _tidy(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("must not be blank")
+        return v
+
+    @field_validator("timezone")
+    @classmethod
+    def _real_zone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("unknown time zone") from exc
+        return v
 
 
 # =============================================================== onboarding

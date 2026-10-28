@@ -25,7 +25,9 @@ def upgrade() -> None:
     op.add_column("tasks", sa.Column("date", sa.Date(), nullable=True))
     op.add_column("tasks", sa.Column("start_time", sa.String(5), nullable=True))
     op.add_column("tasks", sa.Column("end_time", sa.String(5), nullable=True))
-    op.add_column("tasks", sa.Column("repeat", sa.Boolean(), server_default=sa.false(), nullable=False))
+    op.add_column(
+        "tasks", sa.Column("repeat", sa.Boolean(), server_default=sa.false(), nullable=False)
+    )
     op.add_column("tasks", sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True))
     op.create_index("ix_tasks_user_date", "tasks", ["user_id", "date"])
     op.create_check_constraint("ck_tasks_priority", "tasks", "priority IN ('high','medium','low')")

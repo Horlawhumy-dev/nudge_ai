@@ -73,6 +73,10 @@ class User(Base):
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     plan: Mapped[str] = mapped_column(String(16), default="free", nullable=False)
+    # Path under the media mount (e.g. /media/avatars/<file>); null means the default avatar.
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    # A requested new email, not yet confirmed with the code sent to it.
+    pending_email: Mapped[str | None] = mapped_column(String(320))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=_now
@@ -114,7 +118,10 @@ class VerificationCode(Base):
 
     __table_args__ = (
         Index("ix_verification_user_purpose", "user_id", "purpose"),
-        CheckConstraint("purpose in ('email_verification','password_reset')", name="ck_vc_purpose"),
+        CheckConstraint(
+            "purpose in ('email_verification','password_reset','email_change')",
+            name="ck_vc_purpose",
+        ),
     )
 
 

@@ -19,9 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "habits", sa.Column("emoji", sa.String(16), server_default="🎯", nullable=False)
-    )
+    op.add_column("habits", sa.Column("emoji", sa.String(16), server_default="🎯", nullable=False))
     op.add_column("habits", sa.Column("category", sa.String(40), nullable=True))
     op.add_column(
         "habits", sa.Column("time_of_day", sa.String(12), server_default="morning", nullable=False)
@@ -29,7 +27,9 @@ def upgrade() -> None:
     op.add_column(
         "habits", sa.Column("frequency", sa.String(12), server_default="daily", nullable=False)
     )
-    op.add_column("habits", sa.Column("goal_days", sa.Integer(), server_default="7", nullable=False))
+    op.add_column(
+        "habits", sa.Column("goal_days", sa.Integer(), server_default="7", nullable=False)
+    )
     op.add_column("habits", sa.Column("stacked_after_id", sa.UUID(), nullable=True))
     op.create_foreign_key(
         "fk_habits_stacked_after",

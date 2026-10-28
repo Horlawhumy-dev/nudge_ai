@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -37,6 +38,13 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ["BASETEN_API_KEY"] = ""
     os.environ["EMBEDDING_MODEL"] = ""
     os.environ["ENVIRONMENT"] = "test"
+
+
+@pytest.fixture(autouse=True)
+def _tmp_media(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Uploads go to a per-test directory instead of the working tree."""
+    monkeypatch.setattr(get_settings(), "media_dir", str(tmp_path / "media"))
+    return tmp_path / "media"
 
 
 @pytest.fixture(autouse=True)

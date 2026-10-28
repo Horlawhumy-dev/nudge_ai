@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from app.api.deps import CurrentUser, SessionDep
 from app.db.models import Habit, Task
@@ -20,12 +20,13 @@ from app.schemas.models import (
     OverallStreakResponse,
     PreferenceResponse,
     PreferenceUpdate,
+    ProfileUpdate,
     TaskCreate,
     TaskResponse,
     TaskUpdate,
     UserResponse,
 )
-from app.services import core_service
+from app.services import core_service, media_service
 from app.services.core_service import Conflict, Invalid, NotFound
 
 router = APIRouter(tags=["core"])
@@ -60,6 +61,46 @@ async def _http[T](fn: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -
 
 @router.get("/profile", response_model=UserResponse)
 async def get_profile(user: CurrentUser) -> UserResponse:
+    return UserResponse.model_validate(user)
+
+
+@router.patch("/profile", response_model=UserResponse)
+async def update_profile(
+    payload: ProfileUpdate, user: CurrentUser, session: SessionDep
+) -> UserResponse:
+    """Edit the display name or time zone. Email changes go through /auth/change-email."""
+    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
+    for key, value in changes.items():
+        setattr(user, key, value)
+    if "timezone" in changes and user.preferences is not None:
+        user.preferences.timezone = changes["timezone"]  # the engine reads this one
+    await session.commit()
+    await session.refresh(user)
+    return UserResponse.model_validate(user)
+
+
+@router.post("/profile/avatar", response_model=UserResponse)
+async def upload_avatar(request: Request, user: CurrentUser, session: SessionDep) -> UserResponse:
+    """Set the profile photo. Send the raw PNG/JPEG/WebP bytes as the request body."""
+    try:
+        url = await media_service.store_avatar(user.id, request.stream())
+    except media_service.UploadError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    previous = user.avatar_url
+    user.avatar_url = url
+    await session.commit()
+    media_service.remove_avatar_file(previous)
+    await session.refresh(user)
+    return UserResponse.model_validate(user)
+
+
+@router.delete("/profile/avatar", response_model=UserResponse)
+async def remove_avatar(user: CurrentUser, session: SessionDep) -> UserResponse:
+    previous = user.avatar_url
+    user.avatar_url = None
+    await session.commit()
+    media_service.remove_avatar_file(previous)
+    await session.refresh(user)
     return UserResponse.model_validate(user)
 
 

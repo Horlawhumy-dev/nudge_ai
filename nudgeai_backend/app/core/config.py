@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     # --- tools ---
     calendar_enabled: bool = False  # deterministic stub until a real credential exists
 
+    # --- uploads ---
+    # Avatars are written here and served read-only at /media. Point it at a persistent volume
+    # in production; swap for object storage when the app runs on more than one host.
+    media_dir: str = "media"
+    avatar_max_bytes: int = 2_000_000
+
     # --- email ---
     resend_api_key: str = Field(default="", description="Resend API key for email delivery")
     # Must be an address on a domain verified in Resend. The shared onboarding@resend.dev

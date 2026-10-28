@@ -14,3 +14,6 @@ __pycache__/
 
 # Alembic
 alembic/versions/*.db
+
+# Uploaded files (avatars)
+media/

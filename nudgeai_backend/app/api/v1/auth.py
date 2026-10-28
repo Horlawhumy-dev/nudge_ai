@@ -9,6 +9,10 @@ from app.api.limits import rate_limit
 from app.core.config import get_settings
 from app.infra.redis import get_redis, k_rl
 from app.schemas.models import (
+    ChangeEmailRequest,
+    ChangePasswordRequest,
+    ConfirmEmailChangeRequest,
+    DeleteAccountRequest,
     ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
@@ -210,3 +214,88 @@ async def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> 
 @router.get("/me", response_model=UserResponse)
 async def me(user: CurrentUser) -> UserResponse:
     return UserResponse.model_validate(user)
+
+
+# ----------------------------------------------------------- signed-in account changes
+
+
+@router.post(
+    "/change-password",
+    response_model=TokenResponse,
+    dependencies=[
+        Depends(rate_limit("login", limit_setting="rate_limit_login_per_5min", window_seconds=300))
+    ],
+)
+async def change_password(
+    payload: ChangePasswordRequest, user: CurrentUser, session: SessionDep
+) -> TokenResponse:
+    """Change the password. Other sessions are signed out; this device gets fresh tokens."""
+    try:
+        access, refresh = await auth_service.change_password(
+            session,
+            user,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    except auth_service.AuthError as exc:
+        _raise(exc)
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        expires_in=get_settings().access_token_ttl_minutes * 60,
+    )
+
+
+@router.post(
+    "/change-email",
+    response_model=MessageResponse,
+    dependencies=[
+        Depends(
+            rate_limit("forgot", limit_setting="rate_limit_forgot_per_hour", window_seconds=3600)
+        )
+    ],
+)
+async def change_email(
+    payload: ChangeEmailRequest, user: CurrentUser, session: SessionDep
+) -> MessageResponse:
+    """Ask to change the account email; a code is sent to the new address."""
+    try:
+        await auth_service.request_email_change(
+            session, user, new_email=payload.new_email, password=payload.password
+        )
+    except auth_service.AuthError as exc:
+        _raise(exc)
+    return MessageResponse(message="we sent a code to your new email address")
+
+
+@router.post(
+    "/confirm-email-change",
+    response_model=UserResponse,
+    dependencies=[
+        Depends(
+            rate_limit(
+                "codes", limit_setting="rate_limit_code_attempts_per_5min", window_seconds=300
+            )
+        )
+    ],
+)
+async def confirm_email_change(
+    payload: ConfirmEmailChangeRequest, user: CurrentUser, session: SessionDep
+) -> UserResponse:
+    try:
+        updated = await auth_service.confirm_email_change(session, user, code=payload.code)
+    except auth_service.AuthError as exc:
+        _raise(exc)
+    return UserResponse.model_validate(updated)
+
+
+@router.post("/delete-account", response_model=MessageResponse)
+async def delete_account(
+    payload: DeleteAccountRequest, user: CurrentUser, session: SessionDep
+) -> MessageResponse:
+    """Permanently delete the account and all its data. Needs the password."""
+    try:
+        await auth_service.delete_account(session, user, password=payload.password)
+    except auth_service.AuthError as exc:
+        _raise(exc)
+    return MessageResponse(message="account deleted")

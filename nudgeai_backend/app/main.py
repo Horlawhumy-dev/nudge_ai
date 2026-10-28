@@ -6,11 +6,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router, ops_router
 from app.core.config import get_settings
 from app.db.session import dispose_engine
 from app.infra.redis import close_redis, redis_ping
+from app.services import media_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("nudgeai")
@@ -67,6 +69,11 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router, prefix=s.api_prefix)
     app.include_router(ops_router)
+    # Uploaded avatars, read-only. The directory is created here so the mount never fails.
+    media_service.media_root().mkdir(parents=True, exist_ok=True)
+    app.mount(
+        media_service.MEDIA_URL, StaticFiles(directory=media_service.media_root()), name="media"
+    )
 
     @app.get("/", tags=["ops"])
     async def root() -> dict[str, str]:

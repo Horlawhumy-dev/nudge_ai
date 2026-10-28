@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 
 EMAIL_VERIFICATION = "email_verification"
 PASSWORD_RESET = "password_reset"  # noqa: S105
+EMAIL_CHANGE = "email_change"
 
 
 async def _deliver_code(email: str, code: str, purpose: str, ttl_minutes: int) -> None:
@@ -325,3 +326,97 @@ async def get_user_by_id(session: AsyncSession, user_id: UUID) -> User | None:
         .options(selectinload(User.preferences), selectinload(User.onboarding))
         .where(User.id == user_id)
     )
+
+
+# ----------------------------------------------------------- signed-in account changes
+
+
+def _check_password(user: User, password: str) -> None:
+    if not verify_password(password, user.password_hash):
+        raise AuthError(403, "incorrect password")
+
+
+async def _revoke_all_sessions(session: AsyncSession, user_id: UUID) -> None:
+    rows = await session.scalars(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None)
+        )
+    )
+    now = datetime.now(UTC)
+    for row in rows:
+        row.revoked_at = now
+
+
+async def change_password(
+    session: AsyncSession, user: User, *, current_password: str, new_password: str
+) -> tuple[str, str]:
+    """Set a new password and return a fresh session.
+
+    Every existing refresh token is revoked (a stolen session shouldn't survive a password
+    change); the caller gets a new pair so the device that made the change stays signed in.
+    """
+    _check_password(user, current_password)
+    if verify_password(new_password, user.password_hash):
+        raise AuthError(400, "choose a password you haven't used here before")
+    user.password_hash = hash_password(new_password)
+    await _revoke_all_sessions(session, user.id)
+    await session.commit()
+    return await issue_session(session, user)
+
+
+async def request_email_change(
+    session: AsyncSession, user: User, *, new_email: str, password: str
+) -> None:
+    """Start changing the account email: confirm with a code sent to the *new* address."""
+    s = get_settings()
+    _check_password(user, password)
+    new_email = new_email.lower().strip()
+    if new_email == user.email:
+        raise AuthError(400, "that is already your email")
+    if await session.scalar(select(User.id).where(User.email == new_email)) is not None:
+        raise AuthError(409, "email already registered")
+
+    await session.execute(
+        delete(VerificationCode).where(
+            VerificationCode.user_id == user.id,
+            VerificationCode.purpose == EMAIL_CHANGE,
+            VerificationCode.consumed_at.is_(None),
+        )
+    )
+    code = generate_numeric_code(s.verification_code_length)
+    session.add(
+        VerificationCode(
+            user_id=user.id,
+            code=code,
+            purpose=EMAIL_CHANGE,
+            expires_at=datetime.now(UTC) + timedelta(minutes=s.verification_code_ttl_minutes),
+        )
+    )
+    user.pending_email = new_email
+    await session.commit()
+    await _deliver_code(new_email, code, EMAIL_CHANGE, s.verification_code_ttl_minutes)
+
+
+async def confirm_email_change(session: AsyncSession, user: User, *, code: str) -> User:
+    if not user.pending_email:
+        raise AuthError(400, "no email change in progress")
+    new_email = user.pending_email
+    # Re-check: someone may have registered it since the code was sent.
+    if await session.scalar(select(User.id).where(User.email == new_email)) is not None:
+        user.pending_email = None
+        await session.commit()
+        raise AuthError(409, "email already registered")
+    await _consume_code(session, user.id, code, EMAIL_CHANGE)
+    user.email = new_email
+    user.pending_email = None
+    user.is_email_verified = True
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def delete_account(session: AsyncSession, user: User, *, password: str) -> None:
+    """Permanently remove the user and everything that hangs off them (FK cascades)."""
+    _check_password(user, password)
+    await session.execute(delete(User).where(User.id == user.id))
+    await session.commit()
