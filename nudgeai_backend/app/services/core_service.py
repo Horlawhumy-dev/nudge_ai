@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Habit, HabitCompletion, Streak, Task
+from app.db.models import Habit, HabitCompletion, Streak, Task, User
 
 
 class NotFound(Exception):
@@ -26,6 +27,37 @@ class Conflict(Exception):
 _GOAL_BY_FREQUENCY = {"daily": 7, "weekdays": 5, "weekly": 1}
 # Reminder time used when a habit has only a time of day (matches the mobile defaults).
 _DEFAULT_TIME = {"morning": "08:00", "afternoon": "14:00", "evening": "19:00"}
+
+
+# How far back a check-in can be added or removed (late logging, fixing a mistake).
+MAX_BACKFILL_DAYS = 60
+
+
+def user_zone(user: User) -> ZoneInfo:
+    """The user's time zone: their preference, else the signup zone, else UTC."""
+    prefs = user.preferences
+    for name in (prefs.timezone if prefs else None, user.timezone):
+        if not name:
+            continue
+        try:
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            continue
+    return ZoneInfo("UTC")
+
+
+def local_today(user: User, now: datetime | None = None) -> date:
+    """Today's calendar date where the user is, not in UTC."""
+    return (now or datetime.now(UTC)).astimezone(user_zone(user)).date()
+
+
+def check_checkin_day(day: date, *, today: date) -> date:
+    """Validate the day a check-in is being recorded for."""
+    if day > today:
+        raise Invalid("can't check in for a day that hasn't happened yet")
+    if (today - day).days > MAX_BACKFILL_DAYS:
+        raise Invalid(f"check-ins can only be changed for the last {MAX_BACKFILL_DAYS} days")
+    return day
 
 
 class Invalid(Exception):
@@ -203,7 +235,12 @@ def recompute_streak(completion_days: list[date], *, today: date) -> tuple[int, 
 
 
 async def complete_habit(
-    session: AsyncSession, user_id: UUID, habit_id: UUID, *, on: date | None = None
+    session: AsyncSession,
+    user_id: UUID,
+    habit_id: UUID,
+    *,
+    on: date | None = None,
+    today: date | None = None,
 ) -> Habit:
     habit = await get_habit(session, user_id, habit_id)
     day = on or datetime.now(UTC).date()
@@ -224,7 +261,9 @@ async def complete_habit(
             .order_by(HabitCompletion.completed_on)
         )
     )
-    current, longest, last = recompute_streak(days, today=day)
+    # Judge the streak against the real today, not the day being edited: backfilling
+    # last week must not make a broken streak look alive.
+    current, longest, last = recompute_streak(days, today=today or day)
     if habit.streak is None:
         habit.streak = Streak(habit_id=habit.id, current=0, best=0)
     habit.streak.current = current
@@ -236,7 +275,12 @@ async def complete_habit(
 
 
 async def uncomplete_habit(
-    session: AsyncSession, user_id: UUID, habit_id: UUID, *, on: date | None = None
+    session: AsyncSession,
+    user_id: UUID,
+    habit_id: UUID,
+    *,
+    on: date | None = None,
+    today: date | None = None,
 ) -> Habit:
     habit = await get_habit(session, user_id, habit_id)
     day = on or datetime.now(UTC).date()
@@ -255,13 +299,89 @@ async def uncomplete_habit(
             .order_by(HabitCompletion.completed_on)
         )
     )
-    current, longest, last = recompute_streak(days, today=day)
+    # Judge the streak against the real today, not the day being edited: backfilling
+    # last week must not make a broken streak look alive.
+    current, longest, last = recompute_streak(days, today=today or day)
     if habit.streak is not None:
         habit.streak.current = current
         habit.streak.best = max(habit.streak.best, longest)
         habit.streak.last_completed_on = last
     await session.commit()
     return await get_habit(session, user_id, habit.id)
+
+
+async def completion_days(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    start: date,
+    end: date,
+    habit_id: UUID | None = None,
+) -> dict[UUID, list[date]]:
+    """Check-in dates per habit within [start, end], oldest first.
+
+    Archived habits are included only when asked for by id, so deleted habits don't leak
+    into the overview.
+    """
+    stmt = (
+        select(HabitCompletion.habit_id, HabitCompletion.completed_on)
+        .join(Habit, Habit.id == HabitCompletion.habit_id)
+        .where(
+            HabitCompletion.user_id == user_id,
+            HabitCompletion.completed_on >= start,
+            HabitCompletion.completed_on <= end,
+        )
+        .order_by(HabitCompletion.completed_on)
+    )
+    if habit_id is not None:
+        stmt = stmt.where(HabitCompletion.habit_id == habit_id)
+    else:
+        stmt = stmt.where(Habit.archived_at.is_(None))
+    out: dict[UUID, list[date]] = {}
+    for hid, day in (await session.execute(stmt)).all():
+        out.setdefault(hid, []).append(day)
+    return out
+
+
+async def habit_progress(
+    session: AsyncSession, habits: list[Habit], *, today: date
+) -> dict[UUID, tuple[bool, int]]:
+    """(done today, check-ins in the last 7 days) for each habit, in one query."""
+    if not habits:
+        return {}
+    window_start = today - timedelta(days=6)
+    rows = await session.execute(
+        select(HabitCompletion.habit_id, HabitCompletion.completed_on).where(
+            HabitCompletion.habit_id.in_([h.id for h in habits]),
+            HabitCompletion.completed_on >= window_start,
+            HabitCompletion.completed_on <= today,
+        )
+    )
+    done: dict[UUID, set[date]] = {}
+    for hid, day in rows.all():
+        done.setdefault(hid, set()).add(day)
+    return {h.id: (today in done.get(h.id, set()), len(done.get(h.id, set()))) for h in habits}
+
+
+async def overall_streak(
+    session: AsyncSession, user_id: UUID, *, today: date
+) -> tuple[int, int, bool, date | None]:
+    """(current, best, active today, last active day) across every habit.
+
+    A day counts when at least one habit was checked in; like the per-habit streak it stays
+    alive through yesterday until today ends.
+    """
+    days = list(
+        await session.scalars(
+            select(HabitCompletion.completed_on)
+            .join(Habit, Habit.id == HabitCompletion.habit_id)
+            .where(HabitCompletion.user_id == user_id, Habit.archived_at.is_(None))
+            .distinct()
+            .order_by(HabitCompletion.completed_on)
+        )
+    )
+    current, best, last = recompute_streak(days, today=today)
+    return current, best, today in set(days), last
 
 
 # ==================================================================== tasks

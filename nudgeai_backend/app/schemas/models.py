@@ -198,6 +198,30 @@ class HabitResponse(ORMModel):
     stacked_after_id: UUID | None
     active: bool
     streak: StreakResponse | None = None
+    # Derived per request in the user's local day (not stored).
+    done_today: bool = False
+    done_last_7d: int = 0
+
+
+class CheckinRequest(BaseModel):
+    """Optional body for complete/uncomplete: the local day to record (default: today)."""
+
+    on: date | None = None
+
+
+class CompletionsResponse(BaseModel):
+    """Check-in dates per habit for a date range."""
+
+    start: date
+    end: date
+    days: dict[UUID, list[date]]
+
+
+class OverallStreakResponse(BaseModel):
+    current: int
+    best: int
+    active_today: bool
+    last_active_on: date | None
 
 
 # =================================================================== tasks

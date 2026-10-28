@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, SessionDep
+from app.db.models import Habit
 from app.schemas.models import (
+    CheckinRequest,
+    CompletionsResponse,
     HabitCreate,
     HabitResponse,
     HabitUpdate,
     OnboardingRequest,
     OnboardingResponse,
+    OverallStreakResponse,
     PreferenceResponse,
     PreferenceUpdate,
     TaskCreate,
@@ -24,6 +29,14 @@ from app.services import core_service
 from app.services.core_service import Conflict, Invalid, NotFound
 
 router = APIRouter(tags=["core"])
+
+
+async def _http_sync[T](fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """Like _http for plain functions that raise service errors."""
+    try:
+        return fn(*args, **kwargs)
+    except Invalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 async def _http[T](fn: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -> T:
@@ -101,25 +114,84 @@ async def put_preferences(
 
 # =================================================================== habits
 
+MAX_RANGE_DAYS = 366
+
+
+async def _habit_out(
+    session: SessionDep, user: CurrentUser, habits: list[Habit]
+) -> list[HabitResponse]:
+    """Responses with the per-day fields filled in for the user's local today."""
+    progress = await core_service.habit_progress(
+        session, habits, today=core_service.local_today(user)
+    )
+    out: list[HabitResponse] = []
+    for habit in habits:
+        resp = HabitResponse.model_validate(habit)
+        resp.done_today, resp.done_last_7d = progress.get(habit.id, (False, 0))
+        out.append(resp)
+    return out
+
+
+async def _one(session: SessionDep, user: CurrentUser, habit: Habit) -> HabitResponse:
+    return (await _habit_out(session, user, [habit]))[0]
+
+
+def _range(start: date | None, end: date | None, *, today: date) -> tuple[date, date]:
+    end = end or today
+    start = start or end - timedelta(days=89)
+    if start > end:
+        raise HTTPException(status_code=422, detail="'from' must not be after 'to'")
+    if (end - start).days >= MAX_RANGE_DAYS:
+        raise HTTPException(status_code=422, detail=f"range is limited to {MAX_RANGE_DAYS} days")
+    return start, end
+
 
 @router.post("/habits", response_model=HabitResponse, status_code=status.HTTP_201_CREATED)
 async def create_habit(
     payload: HabitCreate, user: CurrentUser, session: SessionDep
 ) -> HabitResponse:
     habit = await _http(core_service.create_habit, session, user.id, **payload.model_dump())
-    return HabitResponse.model_validate(habit)
+    return await _one(session, user, habit)
 
 
 @router.get("/habits", response_model=list[HabitResponse])
 async def list_habits(user: CurrentUser, session: SessionDep) -> list[HabitResponse]:
-    habits = await core_service.list_habits(session, user.id)
-    return [HabitResponse.model_validate(h) for h in habits]
+    return await _habit_out(session, user, await core_service.list_habits(session, user.id))
+
+
+@router.get("/habits/completions", response_model=CompletionsResponse)
+async def all_completions(
+    user: CurrentUser,
+    session: SessionDep,
+    start: date | None = Query(default=None, alias="from"),
+    end: date | None = Query(default=None, alias="to"),
+) -> CompletionsResponse:
+    """Check-in dates for every active habit in a range (default: the last 90 days)."""
+    first, last = _range(start, end, today=core_service.local_today(user))
+    days = await core_service.completion_days(session, user.id, start=first, end=last)
+    return CompletionsResponse(start=first, end=last, days=days)
 
 
 @router.get("/habits/{habit_id}", response_model=HabitResponse)
 async def get_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
     habit = await _http(core_service.get_habit, session, user.id, habit_id)
-    return HabitResponse.model_validate(habit)
+    return await _one(session, user, habit)
+
+
+@router.get("/habits/{habit_id}/completions", response_model=CompletionsResponse)
+async def habit_completions(
+    habit_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    start: date | None = Query(default=None, alias="from"),
+    end: date | None = Query(default=None, alias="to"),
+) -> CompletionsResponse:
+    await _http(core_service.get_habit, session, user.id, habit_id)
+    first, last = _range(start, end, today=core_service.local_today(user))
+    days = await core_service.completion_days(
+        session, user.id, start=first, end=last, habit_id=habit_id
+    )
+    return CompletionsResponse(start=first, end=last, days={habit_id: days.get(habit_id, [])})
 
 
 @router.patch("/habits/{habit_id}", response_model=HabitResponse)
@@ -133,32 +205,66 @@ async def update_habit(
         habit_id,
         **payload.model_dump(exclude_unset=True),
     )
-    return HabitResponse.model_validate(habit)
+    return await _one(session, user, habit)
 
 
 @router.post("/habits/{habit_id}/complete", response_model=HabitResponse)
-async def complete_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
-    habit = await _http(core_service.complete_habit, session, user.id, habit_id)
-    return HabitResponse.model_validate(habit)
+async def complete_habit(
+    habit_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    payload: CheckinRequest | None = None,
+) -> HabitResponse:
+    """Check a habit in for ``on`` (default: today where the user is). Idempotent."""
+    today = core_service.local_today(user)
+    day = await _http_sync(
+        core_service.check_checkin_day, (payload and payload.on) or today, today=today
+    )
+    habit = await _http(
+        core_service.complete_habit, session, user.id, habit_id, on=day, today=today
+    )
+    return await _one(session, user, habit)
 
 
 @router.post("/habits/{habit_id}/uncomplete", response_model=HabitResponse)
-async def uncomplete_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
-    habit = await _http(core_service.uncomplete_habit, session, user.id, habit_id)
-    return HabitResponse.model_validate(habit)
+async def uncomplete_habit(
+    habit_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    payload: CheckinRequest | None = None,
+) -> HabitResponse:
+    today = core_service.local_today(user)
+    day = await _http_sync(
+        core_service.check_checkin_day, (payload and payload.on) or today, today=today
+    )
+    habit = await _http(
+        core_service.uncomplete_habit, session, user.id, habit_id, on=day, today=today
+    )
+    return await _one(session, user, habit)
 
 
 @router.post("/habits/{habit_id}/restore", response_model=HabitResponse)
 async def restore_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
     """Undo a delete (the mobile "Undo" toast)."""
     habit = await _http(core_service.restore_habit, session, user.id, habit_id)
-    return HabitResponse.model_validate(habit)
+    return await _one(session, user, habit)
 
 
 @router.delete("/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> Response:
     await _http(core_service.delete_habit, session, user.id, habit_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/streak", response_model=OverallStreakResponse)
+async def overall_streak(user: CurrentUser, session: SessionDep) -> OverallStreakResponse:
+    """Consecutive days with at least one check-in (the flame on Home)."""
+    current, best, active_today, last = await core_service.overall_streak(
+        session, user.id, today=core_service.local_today(user)
+    )
+    return OverallStreakResponse(
+        current=current, best=best, active_today=active_today, last_active_on=last
+    )
 
 
 # ==================================================================== tasks

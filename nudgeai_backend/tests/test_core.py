@@ -343,3 +343,164 @@ async def test_deleting_a_trigger_unstacks_dependants_and_restore_brings_it_back
     # a stranger can't restore it
     other = await _authed(client, session, "restore2@example.com")
     assert (await client.post(f"{H}/{trigger['id']}/restore", headers=other)).status_code == 404
+
+
+# =========================================================== check-ins, history, streak
+
+
+async def _set_zone(session: AsyncSession, email: str, zone: str) -> None:
+    user = await session.scalar(select(User).where(User.email == email))
+    assert user is not None
+    user.timezone = zone
+    await session.commit()
+
+
+def _local_today(zone: str) -> date:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(UTC).astimezone(ZoneInfo(zone)).date()
+
+
+async def test_habit_reports_done_today_and_last_seven_days(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "progress@example.com")
+    habit = await _habit(client, h)
+    assert habit["done_today"] is False and habit["done_last_7d"] == 0
+
+    done = (await client.post(f"{H}/{habit['id']}/complete", headers=h)).json()
+    assert done["done_today"] is True and done["done_last_7d"] == 1
+
+    listed = (await client.get(H, headers=h)).json()
+    assert listed[0]["done_today"] is True
+    undone = (await client.post(f"{H}/{habit['id']}/uncomplete", headers=h)).json()
+    assert undone["done_today"] is False and undone["done_last_7d"] == 0
+
+
+async def test_checkin_for_a_past_day_and_the_streak_is_judged_from_today(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "backfill@example.com")
+    habit = await _habit(client, h)
+    three_ago = (TODAY - timedelta(days=3)).isoformat()
+    r = await client.post(f"{H}/{habit['id']}/complete", json={"on": three_ago}, headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    # A lone check-in three days ago is not a live streak, and today isn't done.
+    assert body["streak"]["current"] == 0 and body["streak"]["best"] == 1
+    assert body["done_today"] is False and body["done_last_7d"] == 1
+
+    # Filling the gap up to yesterday makes the run alive again.
+    for back in (2, 1):
+        await client.post(
+            f"{H}/{habit['id']}/complete",
+            json={"on": (TODAY - timedelta(days=back)).isoformat()},
+            headers=h,
+        )
+    after = (await client.get(f"{H}/{habit['id']}", headers=h)).json()
+    assert after["streak"]["current"] == 3
+
+
+async def test_checkin_day_limits(client: AsyncClient, session: AsyncSession) -> None:
+    h = await _authed(client, session, "limits@example.com")
+    habit = await _habit(client, h)
+    tomorrow = (TODAY + timedelta(days=2)).isoformat()
+    future = await client.post(f"{H}/{habit['id']}/complete", json={"on": tomorrow}, headers=h)
+    assert future.status_code == 422
+    ancient = (TODAY - timedelta(days=90)).isoformat()
+    old = await client.post(f"{H}/{habit['id']}/complete", json={"on": ancient}, headers=h)
+    assert old.status_code == 422
+    assert (
+        await client.post(f"{H}/{habit['id']}/complete", json={"on": "nope"}, headers=h)
+    ).status_code == 422
+
+
+async def test_complete_is_idempotent(client: AsyncClient, session: AsyncSession) -> None:
+    h = await _authed(client, session, "idem@example.com")
+    habit = await _habit(client, h)
+    for _ in range(3):
+        assert (await client.post(f"{H}/{habit['id']}/complete", headers=h)).status_code == 200
+    days = (await client.get(f"{H}/{habit['id']}/completions", headers=h)).json()["days"]
+    assert len(days[habit["id"]]) == 1
+
+
+async def test_today_follows_the_users_timezone(client: AsyncClient, session: AsyncSession) -> None:
+    """A check-in is recorded on the user's local date, not the UTC date."""
+    email = "tz@example.com"
+    h = await _authed(client, session, email)
+    await _set_zone(session, email, "Pacific/Kiritimati")  # UTC+14: often a day ahead of UTC
+    habit = await _habit(client, h)
+    await client.post(f"{H}/{habit['id']}/complete", headers=h)
+    days = (await client.get(f"{H}/{habit['id']}/completions", headers=h)).json()["days"]
+    assert days[habit["id"]] == [_local_today("Pacific/Kiritimati").isoformat()]
+
+
+async def test_completions_history_over_a_range(client: AsyncClient, session: AsyncSession) -> None:
+    h = await _authed(client, session, "history@example.com")
+    a = await _habit(client, h, name="A")
+    b = await _habit(client, h, name="B")
+    for back in (0, 1, 5):
+        await client.post(
+            f"{H}/{a['id']}/complete",
+            json={"on": (TODAY - timedelta(days=back)).isoformat()},
+            headers=h,
+        )
+    await client.post(f"{H}/{b['id']}/complete", headers=h)
+
+    allr = (await client.get(f"{H}/completions", headers=h)).json()
+    assert len(allr["days"][a["id"]]) == 3 and len(allr["days"][b["id"]]) == 1
+    assert allr["days"][a["id"]] == sorted(allr["days"][a["id"]])
+
+    narrow = (
+        await client.get(
+            f"{H}/completions",
+            params={"from": (TODAY - timedelta(days=2)).isoformat(), "to": TODAY.isoformat()},
+            headers=h,
+        )
+    ).json()
+    assert len(narrow["days"][a["id"]]) == 2
+
+    bad = await client.get(f"{H}/completions", params={"from": "2020-01-01"}, headers=h)
+    assert bad.status_code == 422  # a range of years is refused
+    flipped = await client.get(
+        f"{H}/completions", params={"from": "2026-05-10", "to": "2026-05-01"}, headers=h
+    )
+    assert flipped.status_code == 422
+
+
+async def test_history_excludes_deleted_habits_and_other_users(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    a = await _authed(client, session, "own@example.com")
+    b = await _authed(client, session, "peer@example.com")
+    mine = await _habit(client, a, name="Mine")
+    gone = await _habit(client, a, name="Gone")
+    theirs = await _habit(client, b, name="Theirs")
+    for hid, hdr in ((mine, a), (gone, a), (theirs, b)):
+        await client.post(f"{H}/{hid['id']}/complete", headers=hdr)
+    await client.delete(f"{H}/{gone['id']}", headers=a)
+
+    days = (await client.get(f"{H}/completions", headers=a)).json()["days"]
+    assert set(days) == {mine["id"]}
+    # someone else's habit is a 404, not an empty list
+    other = await client.get(f"{H}/{theirs['id']}/completions", headers=a)
+    assert other.status_code == 404
+
+
+async def test_overall_streak_counts_any_habit(client: AsyncClient, session: AsyncSession) -> None:
+    h = await _authed(client, session, "overall@example.com")
+    empty = (await client.get("/api/v1/streak", headers=h)).json()
+    assert empty == {"current": 0, "best": 0, "active_today": False, "last_active_on": None}
+
+    a = await _habit(client, h, name="A")
+    b = await _habit(client, h, name="B")
+    # A covers days 0 and 1; B fills day 2, so together the streak is three days.
+    for habit, back in ((a, 0), (a, 1), (b, 2)):
+        await client.post(
+            f"{H}/{habit['id']}/complete",
+            json={"on": (TODAY - timedelta(days=back)).isoformat()},
+            headers=h,
+        )
+    streak = (await client.get("/api/v1/streak", headers=h)).json()
+    assert streak["current"] == 3 and streak["best"] == 3 and streak["active_today"] is True
+    assert streak["last_active_on"] == TODAY.isoformat()
