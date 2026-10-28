@@ -152,6 +152,22 @@ async function loadAccount(set: SetAuth) {
 }
 
 /**
+ * `loadAccount` right after the user proved who they are. If it fails, say that sign-in worked but
+ * the account didn't load, with the reason, instead of a generic message that hides what broke.
+ */
+async function loadAccountAfterSignIn(set: SetAuth) {
+  try {
+    await loadAccount(set);
+  } catch (e) {
+    if (e instanceof ApiError && e.isNetwork) throw authError(e);
+    const why = e instanceof ApiError ? ` (${e.status}: ${e.message})` : '';
+    throw new AuthError(
+      `You’re signed in, but we couldn’t load your account${why}. Please try again.`
+    );
+  }
+}
+
+/**
  * The session. With `EXPO_PUBLIC_API_URL` set it talks to the backend; without it (demo mode)
  * it is static: no network, and every method takes a beat so screens show their loading states.
  */
@@ -179,7 +195,7 @@ export const useAuthStore = create<AuthState>()(
             }
             throw authError(e);
           }
-          await loadAccount(set);
+          await loadAccountAfterSignIn(set);
           return;
         }
         await sleep(MOCK_LATENCY_MS);
@@ -239,7 +255,7 @@ export const useAuthStore = create<AuthState>()(
             }
             throw authError(e, 'code');
           }
-          await loadAccount(set);
+          await loadAccountAfterSignIn(set);
           return 'verified';
         }
         await sleep(MOCK_LATENCY_MS);

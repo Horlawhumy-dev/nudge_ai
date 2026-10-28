@@ -63,6 +63,15 @@ describe('auth store with a backend', () => {
     expect(s.user).toMatchObject({ id: 'u1', name: 'Ada Lovelace', nickname: 'Ada' });
   });
 
+  it('says what failed when login works but the account can’t be loaded', async () => {
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockRejectedValue(new ApiError('Method Not Allowed', 405));
+    await expect(useAuthStore.getState().signIn('ada@example.com', 'Passw0rd!')).rejects.toThrow(
+      /signed in, but we couldn’t load your account \(405: Method Not Allowed\)/
+    );
+    expect(useAuthStore.getState().status).toBe('signedOut');
+  });
+
   it('sends a returning user who never finished onboarding back to it', async () => {
     profile.get.mockResolvedValue(apiUser);
     profile.getOnboarding.mockResolvedValue(onboarding(false));
