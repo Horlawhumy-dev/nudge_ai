@@ -53,6 +53,7 @@ from app.engine.scheduler import (
 from app.infra.redis import get_redis, redis_ping
 from app.models.client import ChatClient, ModelError, get_client
 from app.services import notification_service
+from app.services.maintenance import run_maintenance
 
 log = logging.getLogger(__name__)
 
@@ -459,12 +460,14 @@ async def run_forever(*, interval: int = WORKER_INTERVAL_SECONDS) -> None:
         try:
             seeded = await seed_once()
             report = await run_once()
+            maintenance = await run_maintenance()
             log.info(
-                "worker pass: seeded=%d users=%d requeued=%d redis=%s",
+                "worker pass: seeded=%d users=%d requeued=%d redis=%s maintenance=%s",
                 seeded,
                 len(report.users),
                 report.requeued,
                 report.redis,
+                maintenance,
             )
         except Exception:  # noqa: BLE001 — the loop outlives any single pass
             log.exception("worker pass failed")
@@ -479,7 +482,11 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if args.once:
         report = asyncio.run(run_once(batch=args.batch))
-        print(f"users={len(report.users)} requeued={report.requeued} redis={report.redis}")
+        maintenance = asyncio.run(run_maintenance())
+        print(
+            f"users={len(report.users)} requeued={report.requeued} redis={report.redis} "
+            f"maintenance={maintenance}"
+        )
     else:
         asyncio.run(run_forever(interval=args.interval))
 

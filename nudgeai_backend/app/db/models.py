@@ -289,10 +289,13 @@ class Task(Base):
     date: Mapped[dt_date | None] = mapped_column(Date)
     start_time: Mapped[str | None] = mapped_column(String(5))
     end_time: Mapped[str | None] = mapped_column(String(5))
-    # Stored for the client; recurring instances aren't generated server-side yet.
+    # Recurring tasks: each day's occurrence is its own row so it can be ticked, moved or deleted
+    # alone. `series_id` ties the rows of one series together (the first row's id).
     repeat: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    repeat_rule: Mapped[str | None] = mapped_column(String(8))
+    series_id: Mapped[UUID | None] = mapped_column(PgUUID(as_uuid=True), index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -300,6 +303,10 @@ class Task(Base):
         Index("ix_tasks_user_done", "user_id", "done_at"),
         Index("ix_tasks_user_date", "user_id", "date"),
         CheckConstraint("priority IN ('high','medium','low')", name="ck_tasks_priority"),
+        CheckConstraint(
+            "repeat_rule IS NULL OR repeat_rule IN ('daily','weekdays','weekly')",
+            name="ck_tasks_repeat_rule",
+        ),
     )
 
 

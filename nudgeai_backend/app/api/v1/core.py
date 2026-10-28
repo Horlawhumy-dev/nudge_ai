@@ -433,13 +433,13 @@ async def update_task(
 
 @router.post("/tasks/{task_id}/complete", response_model=TaskResponse)
 async def complete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
-    task = await _http(core_service.set_task_done, session, user.id, task_id, done=True)
+    task = await _http(core_service.set_task_done, session, user, task_id, done=True)
     return _task_out(task, datetime.now(UTC))
 
 
 @router.post("/tasks/{task_id}/uncomplete", response_model=TaskResponse)
 async def uncomplete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
-    task = await _http(core_service.set_task_done, session, user.id, task_id, done=False)
+    task = await _http(core_service.set_task_done, session, user, task_id, done=False)
     return _task_out(task, datetime.now(UTC))
 
 
@@ -454,8 +454,15 @@ async def restore_task(task_id: UUID, user: CurrentUser, session: SessionDep) ->
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> Response:
-    await _http(core_service.delete_task, session, user.id, task_id)
+async def delete_task(
+    task_id: UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    series: bool = Query(
+        default=False, description="Also delete later occurrences and stop the repeat."
+    ),
+) -> Response:
+    await _http(core_service.delete_task, session, user.id, task_id, whole_series=series)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

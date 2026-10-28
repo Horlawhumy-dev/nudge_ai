@@ -299,6 +299,7 @@ class OverallStreakResponse(BaseModel):
 Day = date
 
 Priority = Literal["high", "medium", "low"]
+RepeatRule = Literal["daily", "weekdays", "weekly"]
 TaskStatus = Literal["upcoming", "overdue", "completed"]
 
 
@@ -320,7 +321,9 @@ class TaskCreate(BaseModel):
     # "HH:MM" local; omit start for an all-day task. End defaults to one hour after start.
     start_time: TimeStr | None = None
     end_time: TimeStr | None = None
+    # Repeat on a schedule. `repeat: true` alone means daily; a `repeat_rule` implies repeat.
     repeat: bool = False
+    repeat_rule: RepeatRule | None = None
     # Accepted for the AI tools and older clients: derives date when `date` is absent.
     due_at: datetime | None = None
 
@@ -343,6 +346,7 @@ class TaskUpdate(BaseModel):
     start_time: TimeStr | None = None
     end_time: TimeStr | None = None
     repeat: bool | None = None
+    repeat_rule: RepeatRule | None = None
     due_at: datetime | None = None
     done_at: datetime | None = None
 
@@ -359,6 +363,8 @@ class TaskResponse(ORMModel):
     end_time: str | None
     all_day: bool = True
     repeat: bool
+    repeat_rule: str | None = None
+    series_id: UUID | None = None
     due_at: datetime | None
     done_at: datetime | None
     done: bool = False

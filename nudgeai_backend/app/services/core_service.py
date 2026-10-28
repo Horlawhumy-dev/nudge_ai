@@ -430,8 +430,20 @@ async def create_task(session: AsyncSession, user: User, **kwargs: Any) -> Task:
     else:
         day = day or local_today(user)
         due_at = task_due_at(day, start, end, zone)
-    task = Task(user_id=user.id, date=day, due_at=due_at, **kwargs)
+    rule = kwargs.pop("repeat_rule", None)
+    repeats = bool(kwargs.pop("repeat", False) or rule)
+    task = Task(
+        user_id=user.id,
+        date=day,
+        due_at=due_at,
+        repeat=repeats,
+        repeat_rule=(rule or "daily") if repeats else None,
+        **kwargs,
+    )
     session.add(task)
+    await session.flush()
+    if repeats:
+        task.series_id = task.id  # the first occurrence names the series
     await session.commit()
     await session.refresh(task)
     return task
@@ -482,6 +494,34 @@ async def list_tasks(
     return list(await session.scalars(stmt))
 
 
+async def _apply_repeat(session: AsyncSession, task: Task, kwargs: dict[str, Any]) -> None:
+    """Turn recurrence on/off or change its rule, keeping the whole series in step."""
+    if "repeat" not in kwargs and "repeat_rule" not in kwargs:
+        return
+    rule = kwargs.get("repeat_rule")
+    turn_on = kwargs.get("repeat") is True or (
+        rule is not None and kwargs.get("repeat") is not False
+    )
+    turn_off = kwargs.get("repeat") is False
+    if turn_on:
+        task.repeat = True
+        task.repeat_rule = rule or task.repeat_rule or "daily"
+        task.series_id = task.series_id or task.id
+        # The rule applies from this occurrence onward, in the same series.
+        for later in await session.scalars(
+            select(Task).where(Task.series_id == task.series_id, Task.date >= task.date)
+        ):
+            later.repeat, later.repeat_rule = True, task.repeat_rule
+    elif turn_off:
+        # Stop the series: no occurrence of it will be created again.
+        task.repeat, task.repeat_rule = False, None
+        if task.series_id is not None:
+            for sibling in await session.scalars(
+                select(Task).where(Task.series_id == task.series_id)
+            ):
+                sibling.repeat, sibling.repeat_rule = False, None
+
+
 async def update_task(session: AsyncSession, user: User, task_id: UUID, **kwargs: Any) -> Task:
     task = await get_task(session, user.id, task_id)
     zone = user_zone(user)
@@ -494,9 +534,10 @@ async def update_task(session: AsyncSession, user: User, task_id: UUID, **kwargs
     else:
         kwargs.pop("due_at", None)
 
-    for key in ("title", "priority", "repeat", "notes", "done_at"):
+    for key in ("title", "priority", "notes", "done_at"):
         if key in kwargs and (kwargs[key] is not None or key in ("notes", "done_at")):
             setattr(task, key, kwargs[key])
+    await _apply_repeat(session, task, kwargs)
 
     if touches_schedule:
         day = kwargs["date"] if kwargs.get("date") is not None else task.date
@@ -515,18 +556,35 @@ async def update_task(session: AsyncSession, user: User, task_id: UUID, **kwargs
     return task
 
 
-async def set_task_done(session: AsyncSession, user_id: UUID, task_id: UUID, *, done: bool) -> Task:
-    task = await get_task(session, user_id, task_id)
+async def set_task_done(session: AsyncSession, user: User, task_id: UUID, *, done: bool) -> Task:
+    task = await get_task(session, user.id, task_id)
     task.done_at = (task.done_at or datetime.now(UTC)) if done else None
+    if done:
+        from app.services import recurrence
+
+        await recurrence.schedule_next(session, task, user)  # the next occurrence, if repeating
     await session.commit()
     await session.refresh(task)
     return task
 
 
-async def delete_task(session: AsyncSession, user_id: UUID, task_id: UUID) -> None:
-    """Soft delete, so the mobile "Undo" can bring it back."""
+async def delete_task(
+    session: AsyncSession, user_id: UUID, task_id: UUID, *, whole_series: bool = False
+) -> None:
+    """Soft delete, so the mobile "Undo" can bring it back.
+
+    ``whole_series`` also deletes every later occurrence and stops the series from continuing.
+    """
     task = await get_task(session, user_id, task_id)
-    task.deleted_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    task.deleted_at = now
+    if whole_series and task.series_id is not None:
+        for sibling in await session.scalars(
+            select(Task).where(Task.series_id == task.series_id, Task.user_id == user_id)
+        ):
+            sibling.repeat, sibling.repeat_rule = False, None
+            if sibling.date and task.date and sibling.date > task.date:
+                sibling.deleted_at = sibling.deleted_at or now
     await session.commit()
 
 
