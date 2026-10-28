@@ -50,6 +50,12 @@ proposals_total = Counter(
 )
 chat_messages_total = Counter("nudgeai_chat_messages_total", "Chat messages persisted", ["role"])
 
+# ---------------------------------------------------------------- phase 3
+nudge_decisions_total = Counter(
+    "nudgeai_nudge_decisions_total", "Engine decisions", ["action", "rule"]
+)
+nudge_worker_runs_total = Counter("nudgeai_nudge_worker_runs_total", "Worker passes", ["result"])
+
 
 def record_model_call(
     *,

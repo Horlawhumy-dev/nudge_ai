@@ -1,8 +1,16 @@
-.PHONY: run test lint format mypy check db-migrate clean-env help
+.PHONY: run worker worker-once test lint format mypy check db-migrate clean-env help
 
 ## Run the development server
 run:
 	.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8079
+
+## Run the nudge worker loop
+worker:
+	.venv/bin/python -m app.engine.worker
+
+## Run a single nudge worker pass
+worker-once:
+	.venv/bin/python -m app.engine.worker --once
 
 ## Run the test suite
 test:

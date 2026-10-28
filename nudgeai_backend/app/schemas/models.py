@@ -233,3 +233,75 @@ class MemorySearchRequest(BaseModel):
 
 class MemorySearchResponse(BaseModel):
     results: list[MemoryResponse]
+
+
+# ================================================================== nudges
+
+
+class NudgeResponse(ORMModel):
+    id: UUID
+    habit_id: UUID | None
+    scheduled_for: datetime
+    sent_at: datetime | None
+    status: str
+    channel: str
+    body: str | None
+    model_id: str | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    skip_reason: str | None
+    created_at: datetime
+
+
+class RuleLogEntry(BaseModel):
+    rule: str
+    passed: bool
+    detail: str
+
+
+class NudgeDecisionOut(BaseModel):
+    habit_id: UUID
+    habit_name: str
+    action: str
+    rule: str
+    reason: str
+    defer_until: datetime | None = None
+    priority: bool = False
+    log: list[RuleLogEntry]
+
+
+class EvaluateResponse(BaseModel):
+    evaluated: list[NudgeDecisionOut]
+    digest_sent: bool = False
+    nudge_ids: list[UUID] = []
+    errors: list[str] = []
+
+
+class FeedbackRequest(BaseModel):
+    kind: str = Field(pattern=r"^(accepted|snoozed|completed|dismissed)$")
+
+
+class FeedbackResponse(BaseModel):
+    nudge_id: UUID
+    kind: str
+
+
+# ================================================================ analytics
+
+
+class HabitSummary(BaseModel):
+    habit_id: UUID
+    name: str
+    streak_current: int
+    streak_best: int
+    completions_last_7d: int
+
+
+class AnalyticsOverview(BaseModel):
+    habits: list[HabitSummary]
+    active_streaks: int
+    completions_last_7d: int
+    nudges_sent_7d: int
+    nudges_suppressed_7d: int
+    suppressions_by_rule: dict[str, int]
+    insight: str | None = None
