@@ -138,8 +138,8 @@ class Settings(BaseSettings):
     # calls them without a key (the fake serves instead), so a wrong id here
     # fails loudly at probe time, not silently in production.
     model_fast: str = "meta-models/muse-spark-open-1026"
-    model_smart: str = "meta-models/muse-spark"
-    model_deep: str = "meta-models/muse-spark-deep"
+    model_smart: str = "muse-spark-1.2"
+    model_deep: str = "muse-spark-1.3"
     # Hard cap on prompt assembly. A 1M context window is not a licence to fill it.
     chat_history_messages: int = 20
     # Generous ceiling, few retries: cold starts on hosted tiers are slow, and

@@ -171,6 +171,6 @@ def test_default_url_derives_from_the_meta_base(monkeypatch: pytest.MonkeyPatch)
     s = get_settings()
     monkeypatch.setattr(s, "muse_voice_url", "")
     monkeypatch.setattr(s, "meta_api_base_url", "https://api.meta.ai/v1/")
-    assert speech.transcribe_url() == "https://api.meta.ai/v1/audio/transcriptions"
+    assert speech.transcribe_url() == "https://api.meta.ai/v1/asr/transcribe"
     monkeypatch.setattr(s, "muse_voice_url", "https://custom/asr")
     assert speech.transcribe_url() == "https://custom/asr"

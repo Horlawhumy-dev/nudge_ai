@@ -4,11 +4,11 @@ The mobile mic records a short voice note, the app uploads it here, and the text
 normal chat path. ``Transcriber`` is the seam: :class:`MetaTranscriber` talks to Meta,
 :class:`FakeTranscriber` serves tests and local dev without a key.
 
-Verification still owed (Gate 4): Meta's documented transport is a realtime WebSocket
-(``wss://api.meta.ai/v1/asr/realtime``). The HTTP file route below follows the common
-``/audio/transcriptions`` convention and has not been confirmed against Meta's docs, so the URL is
-configurable (``MUSE_VOICE_URL``) and the response parser is deliberately tolerant. If Meta's
-file route differs, only :meth:`MetaTranscriber.transcribe` changes.
+Meta's file route is ``POST /v1/asr/transcribe`` (model ``muse-voice-transcribe-1.0``) and takes
+mono 16-bit PCM WAV at 16 or 24 kHz, up to 10 minutes / 32 MB. Still unconfirmed against a real
+key: the multipart field names and the transcript field in the reply (Meta's public pages don't
+state them), so the parser is deliberately tolerant. Live audio uses ``wss://api.meta.ai/v1/asr/realtime``
+instead. If the file route differs in practice, only :meth:`MetaTranscriber.transcribe` changes.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class Transcriber(Protocol):
 
 def transcribe_url() -> str:
     s = get_settings()
-    return s.muse_voice_url or f"{s.meta_api_base_url.rstrip('/')}/audio/transcriptions"
+    return s.muse_voice_url or f"{s.meta_api_base_url.rstrip('/')}/asr/transcribe"
 
 
 def extract_text(payload: object) -> tuple[str, str | None]:
