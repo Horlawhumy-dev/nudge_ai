@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
@@ -19,6 +20,10 @@ export default function Notifications() {
   const markAllRead = useNotificationsStore((s) => s.markAllRead);
   const dismiss = useNotificationsStore((s) => s.dismiss);
   const restore = useNotificationsStore((s) => s.restore);
+  const refresh = useNotificationsStore((s) => s.refresh);
+  useEffect(() => {
+    void refresh().catch(() => undefined);
+  }, [refresh]);
   const unread = unreadCount(items);
   const groups = groupNotifications(items, now);
 

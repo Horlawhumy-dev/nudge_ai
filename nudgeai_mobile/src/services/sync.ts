@@ -13,6 +13,7 @@ import { taskFromApi, tasksApi } from '@/services/api/endpoints/tasks';
 import { reportFailure } from '@/store/remote';
 import { useChatStore } from '@/store/useChatStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
+import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useTasksStore } from '@/store/useTasksStore';
 
@@ -56,6 +57,10 @@ export async function syncData(): Promise<void> {
     useChatStore
       .getState()
       .loadHistory()
+      .catch(() => undefined),
+    useNotificationsStore
+      .getState()
+      .refresh()
       .catch(() => undefined),
   ]);
 }

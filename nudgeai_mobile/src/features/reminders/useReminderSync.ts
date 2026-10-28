@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { DEMO_MODE } from '@/constants/env';
 import { habitStreak } from '@/features/habits/utils';
 import {
   cancelReminders,
@@ -27,6 +28,12 @@ export function useReminderSync(): void {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // With a server account the backend decides when to nudge (and respects quiet hours, snoozes
+      // and streaks); scheduling these local reminders too would send everything twice.
+      if (!DEMO_MODE) {
+        await cancelReminders();
+        return;
+      }
       if (!pushEnabled || !(await hasReminderPermission())) {
         await cancelReminders();
         return;

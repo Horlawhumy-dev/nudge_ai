@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { isRunningInExpoGo } from 'expo';
 import { Platform } from 'react-native';
 import type * as NotificationsModule from 'expo-notifications';
@@ -116,5 +117,23 @@ export async function scheduleReminders(plan: readonly PlannedReminder[]): Promi
     );
   } catch {
     // scheduling is best-effort; the in-app experience doesn't depend on it
+  }
+}
+
+/**
+ * This phone's Expo push token, or null when push can't work here: web, Expo Go on Android,
+ * permission not granted, or no EAS project id yet (`npx eas-cli init` adds one).
+ */
+export async function getPushToken(): Promise<string | null> {
+  const N = load();
+  if (!N || !(await hasReminderPermission())) return null;
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? undefined;
+  if (!projectId) return null;
+  try {
+    await ensureChannel(N);
+    return (await N.getExpoPushTokenAsync({ projectId })).data;
+  } catch {
+    return null; // offline or the push service is unreachable; we try again next launch
   }
 }

@@ -8,6 +8,7 @@ import { ApiError } from '@/services/api/errors';
 import { authApi } from '@/services/api/endpoints/auth';
 import { profileApi } from '@/services/api/endpoints/profile';
 import { getTokens, onSessionExpired } from '@/services/api/tokens';
+import { unregisterDevice } from '@/services/push';
 import { syncData } from '@/services/sync';
 import type { ApiUser } from '@/services/api/types';
 
@@ -383,7 +384,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signOut: async () => {
-        if (!DEMO_MODE) await authApi.logOut();
+        if (!DEMO_MODE) {
+          await unregisterDevice().catch(() => undefined); // needs the session, so before logging out
+          await authApi.logOut();
+        }
         clearLocalData();
         set({ status: 'signedOut', user: null, pendingEmail: null, resetCode: null });
       },
