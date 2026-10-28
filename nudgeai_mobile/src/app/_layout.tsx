@@ -6,11 +6,20 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ToastHost } from '@/components/ui';
+import { API_URL, DEMO_MODE } from '@/constants/env';
 import { useAppFonts } from '@/hooks/useAppFonts';
 import { configureNotifications } from '@/services/notifications';
 import { colors } from '@/theme';
 
 void SplashScreen.preventAutoHideAsync();
+// Shown in the Metro terminal, so it's obvious whether the app is talking to a server.
+if (__DEV__) {
+  console.log(
+    DEMO_MODE
+      ? '[nudge] DEMO MODE: no EXPO_PUBLIC_API_URL, nothing is sent to a server'
+      : `[nudge] using API ${API_URL}`
+  );
+}
 configureNotifications();
 
 export default function RootLayout() {
