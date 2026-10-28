@@ -47,6 +47,17 @@ make start
 - **Push notifications** need a development build and an EAS project id (`npx eas-cli init`); until then the app works without them. With a server account the backend decides when to nudge, so the app's own scheduled reminders are off.
 - Without the URL the app runs in the offline **demo mode** described below.
 
+### Troubleshooting: "failed to download remote update" in Expo Go
+
+That message means the phone couldn't fetch the JavaScript bundle from your computer. In order of likelihood:
+
+1. **A firewall on your computer is blocking the phone.** On Linux with `ufw`: `sudo ufw allow 8081/tcp` (Expo's dev server) and `sudo ufw allow 8079/tcp` (the API).
+2. **Different networks.** The phone and the computer must be on the same Wi-Fi (not a guest network or one with client isolation), with any VPN off. If you can't get that, use `npx expo start --tunnel`.
+3. **Wrong address in the QR code.** On a machine with Docker, Expo can advertise a `172.x` address. Force the right one: `REACT_NATIVE_PACKAGER_HOSTNAME=<your LAN address> make start`.
+4. **Expo Go out of date.** This project is on SDK 57; update Expo Go from the store.
+
+Quick check from the computer: `curl http://<your LAN address>:8081/status` should print `packager-status:running`.
+
 ## Try it (demo mode)
 
 - **Log in** with any valid email and password → seeded demo account (4 habits, 5 tasks, notifications, chat history). Exception: `demo@nudge.ai` needs `Password1!`; a wrong password shows the "Incorrect email or password" error. The login screen has a tap-to-fill hint.
