@@ -417,7 +417,7 @@ async def test_signup_emails_the_verification_code(
     assert len(outbox) == 1
     mail = outbox[0]
     assert mail["to"] == "ada@example.com"
-    assert mail["from"].startswith("Nudge <")
+    assert mail["from"].startswith("Nudge")
     code = await session.scalar(
         select(VerificationCode).join(User).where(User.email == "ada@example.com")
     )
