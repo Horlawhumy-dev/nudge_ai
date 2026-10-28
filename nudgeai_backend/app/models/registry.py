@@ -64,8 +64,7 @@ def _build() -> dict[Tier, ModelSpec]:
             input_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
             output_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
             notes=(
-                "Meta's open-weight tier served on Baseten (hackathon id). "
-                "Default for everything."
+                "Meta's open-weight tier served on Baseten (hackathon id). Default for everything."
             ),
         ),
         "smart": ModelSpec(
@@ -76,9 +75,7 @@ def _build() -> dict[Tier, ModelSpec]:
             context_window=1_000_000,  # Gate 2b: confirm against the Meta model list
             input_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
             output_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
-            notes=(
-                "Muse Spark on the Meta Model API. Strong agentic and tool calling."
-            ),
+            notes=("Muse Spark on the Meta Model API. Strong agentic and tool calling."),
         ),
         "deep": ModelSpec(
             id=s.model_deep,
@@ -89,8 +86,7 @@ def _build() -> dict[Tier, ModelSpec]:
             input_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
             output_cost_per_mtok=0.0,  # Gate 2b: Meta pricing unpublished
             notes=(
-                "Muse Spark at higher reasoning effort. Reviews the plan and "
-                "the claimed result."
+                "Muse Spark at higher reasoning effort. Reviews the plan and the claimed result."
             ),
         ),
     }
