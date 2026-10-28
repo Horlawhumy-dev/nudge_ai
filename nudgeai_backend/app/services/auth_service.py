@@ -109,7 +109,7 @@ async def signup(
     session.add(user)
     await session.flush()
 
-    code = generate_numeric_code()
+    code = generate_numeric_code(s.verification_code_length)
     session.add(
         VerificationCode(
             user_id=user.id,
@@ -158,7 +158,7 @@ async def resend_verification(session: AsyncSession, *, email: str) -> str | Non
     if existing is not None:
         existing.consumed_at = now
 
-    code = generate_numeric_code()
+    code = generate_numeric_code(s.verification_code_length)
     session.add(
         VerificationCode(
             user_id=user.id,
@@ -199,6 +199,11 @@ async def login(session: AsyncSession, *, email: str, password: str) -> tuple[Us
         user.password_hash = hash_password(password)
         await session.flush()
     return user, create_access_token(user.id), await _persist_refresh(session, user.id)
+
+
+async def issue_session(session: AsyncSession, user: User) -> tuple[str, str]:
+    """A fresh access/refresh pair for a user who has just proved who they are."""
+    return create_access_token(user.id), await _persist_refresh(session, user.id)
 
 
 async def _persist_refresh(session: AsyncSession, user_id: UUID) -> str:
@@ -265,7 +270,7 @@ async def request_password_reset(session: AsyncSession, *, email: str) -> str | 
             VerificationCode.consumed_at.is_(None),
         )
     )
-    code = generate_numeric_code()
+    code = generate_numeric_code(s.verification_code_length)
     session.add(
         VerificationCode(
             user_id=user.id,

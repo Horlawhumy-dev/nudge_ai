@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 30
 
     # --- verification / reset codes (design shows a 00:59 resend countdown) ---
+    # The mobile design shows four boxes; keep the two in step.
+    verification_code_length: int = 4
     verification_code_ttl_minutes: int = 15
     verification_code_max_attempts: int = 5
     resend_cooldown_seconds: int = 60

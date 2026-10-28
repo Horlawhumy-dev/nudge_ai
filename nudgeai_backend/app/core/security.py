@@ -34,6 +34,26 @@ def verify_password(plain: str, hashed: str) -> bool:
     return True
 
 
+PASSWORD_MIN_LENGTH = 8
+
+
+def password_problems(plain: str) -> list[str]:
+    """Every rule the password breaks, as short user-facing messages (empty when fine).
+
+    Mirrors the mobile client's rules so a password it accepts is never rejected here.
+    """
+    problems: list[str] = []
+    if len(plain) < PASSWORD_MIN_LENGTH:
+        problems.append(f"at least {PASSWORD_MIN_LENGTH} characters")
+    if not any(c.isupper() for c in plain):
+        problems.append("a capital letter")
+    if not any(c.isdigit() for c in plain):
+        problems.append("a number")
+    if not any(not c.isalnum() for c in plain):
+        problems.append("a special character")
+    return problems
+
+
 def needs_rehash(hashed: str) -> bool:
     return _hasher.check_needs_rehash(hashed)
 
@@ -100,7 +120,7 @@ def create_refresh_token(subject: str | uuid.UUID) -> str:
 # ---------------------------------------------------------------- codes
 
 
-def generate_numeric_code(length: int = 6) -> str:
+def generate_numeric_code(length: int = 4) -> str:
     import secrets
 
     return "".join(str(secrets.randbelow(10)) for _ in range(length))

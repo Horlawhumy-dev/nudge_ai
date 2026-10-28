@@ -6,7 +6,16 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.security import password_problems
+
 TimeStr = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+
+def _check_password(value: str) -> str:
+    problems = password_problems(value)
+    if problems:
+        raise ValueError("password needs " + ", ".join(problems))
+    return value
 
 
 class ORMModel(BaseModel):
@@ -25,9 +34,7 @@ class SignUpRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def _strong_enough(cls, v: str) -> str:
-        if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
-            raise ValueError("password must contain a letter and a digit")
-        return v
+        return _check_password(v)
 
 
 class VerifyCodeRequest(BaseModel):
@@ -76,9 +83,7 @@ class ResetPasswordRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def _strong_enough(cls, v: str) -> str:
-        if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
-            raise ValueError("password must contain a letter and a digit")
-        return v
+        return _check_password(v)
 
 
 class UserResponse(ORMModel):

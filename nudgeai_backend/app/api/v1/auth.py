@@ -45,13 +45,23 @@ async def signup(payload: SignUpRequest, session: SessionDep) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
-@router.post("/verify-email", response_model=MessageResponse)
-async def verify_email(payload: VerifyCodeRequest, session: SessionDep) -> MessageResponse:
+@router.post("/verify-email", response_model=TokenResponse)
+async def verify_email(payload: VerifyCodeRequest, session: SessionDep) -> TokenResponse:
+    """Confirm the emailed code and sign the user straight in.
+
+    Returning tokens means the client doesn't have to keep the password around
+    between signup and verification just to call /login.
+    """
     try:
-        await auth_service.verify_email(session, email=payload.email, code=payload.code)
+        user = await auth_service.verify_email(session, email=payload.email, code=payload.code)
+        access, refresh = await auth_service.issue_session(session, user)
     except auth_service.AuthError as exc:
         _raise(exc)
-    return MessageResponse(message="email verified — you can sign in now")
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        expires_in=get_settings().access_token_ttl_minutes * 60,
+    )
 
 
 @router.post("/resend-code", response_model=MessageResponse)

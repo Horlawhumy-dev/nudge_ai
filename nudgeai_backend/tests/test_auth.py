@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import RefreshToken, User, VerificationCode
+from app.services import auth_service
 
 PREFIX = "/api/v1/auth"
 
@@ -17,7 +18,7 @@ PREFIX = "/api/v1/auth"
 async def _signup(
     client: AsyncClient,
     email: str = "ada@example.com",
-    password: str = "garden42",  # noqa: S107
+    password: str = "Garden42!",  # noqa: S107
 ) -> str:
     r = await client.post(
         f"{PREFIX}/signup", json={"email": email, "password": password, "name": "Ada"}
@@ -46,7 +47,7 @@ async def test_signup_stores_argon2_hash_never_plaintext(
     await _signup(client)
     user = await session.scalar(select(User).where(User.email == "ada@example.com"))
     assert user is not None
-    assert user.password_hash != "garden42"
+    assert user.password_hash != "Garden42!"
     assert user.password_hash.startswith("$argon2")
     assert user.is_email_verified is False
 
@@ -54,7 +55,7 @@ async def test_signup_stores_argon2_hash_never_plaintext(
 async def test_duplicate_signup_conflicts(client: AsyncClient) -> None:
     await _signup(client)
     r = await client.post(
-        f"{PREFIX}/signup", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/signup", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     assert r.status_code == 409
 
@@ -67,7 +68,7 @@ async def test_signup_rejects_weak_password(client: AsyncClient) -> None:
 async def test_login_blocked_until_verified(client: AsyncClient) -> None:
     await _signup(client)
     r = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     assert r.status_code == 403
 
@@ -77,7 +78,7 @@ async def test_full_auth_round_trip(client: AsyncClient, session: AsyncSession) 
     await _verify(client, session, "ada@example.com")
 
     r = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     assert r.status_code == 200, r.text
     tokens = r.json()
@@ -111,7 +112,7 @@ async def test_refresh_token_revocation_is_persisted(
     await _signup(client)
     await _verify(client, session, "ada@example.com")
     r = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     await client.post(f"{PREFIX}/logout", json={"refresh_token": r.json()["refresh_token"]})
     revoked = await session.scalars(
@@ -139,7 +140,7 @@ async def test_unknown_account_gives_same_message(
     await _signup(client)
     await _verify(client, session, "ada@example.com")
     unknown = await client.post(
-        f"{PREFIX}/login", json={"email": "nobody@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "nobody@example.com", "password": "Garden42!"}
     )
     wrong = await client.post(
         f"{PREFIX}/login", json={"email": "ada@example.com", "password": "wrongpass1"}
@@ -152,7 +153,7 @@ async def test_incorrect_code_counts_attempt(client: AsyncClient, session: Async
     await _signup(client)
     for _ in range(3):
         r = await client.post(
-            f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "000000"}
+            f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "0000"}
         )
         assert r.status_code == 400
     row = await session.scalar(
@@ -167,10 +168,10 @@ async def test_code_lockout_after_max_attempts(client: AsyncClient, session: Asy
     await _signup(client)
     for _ in range(s_max):
         await client.post(
-            f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "000000"}
+            f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "0000"}
         )
     r = await client.post(
-        f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "000000"}
+        f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": "0000"}
     )
     assert r.status_code == 429
 
@@ -198,7 +199,7 @@ async def test_password_reset_flow_revokes_sessions(
     await _signup(client)
     await _verify(client, session, "ada@example.com")
     login = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     old_refresh = login.json()["refresh_token"]
 
@@ -213,17 +214,17 @@ async def test_password_reset_flow_revokes_sessions(
 
     r = await client.post(
         f"{PREFIX}/reset-password",
-        json={"email": "ada@example.com", "code": code, "new_password": "orchard77"},
+        json={"email": "ada@example.com", "code": code, "new_password": "Orchard77!"},
     )
     assert r.status_code == 200, r.text
 
     # Old password is dead, new one works.
     old = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
     )
     assert old.status_code == 401
     new = await client.post(
-        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "orchard77"}
+        f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Orchard77!"}
     )
     assert new.status_code == 200
 
@@ -364,7 +365,7 @@ async def test_refresh_token_cannot_be_used_as_access_token(
     await _verify(client, session, "ada@example.com")
     tokens = (
         await client.post(
-            f"{PREFIX}/login", json={"email": "ada@example.com", "password": "garden42"}
+            f"{PREFIX}/login", json={"email": "ada@example.com", "password": "Garden42!"}
         )
     ).json()
     r = await client.get(
@@ -449,7 +450,7 @@ async def test_send_failure_does_not_break_signup(
 
     monkeypatch.setattr("app.infra.mailer._send_sync", _boom)
     r = await client.post(
-        f"{PREFIX}/signup", json={"email": "grace@example.com", "password": "garden42"}
+        f"{PREFIX}/signup", json={"email": "grace@example.com", "password": "Garden42!"}
     )
     assert r.status_code == 201  # the user can request a new code
 
@@ -471,3 +472,65 @@ async def test_mailer_reports_not_sent_without_a_key(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(get_settings(), "resend_api_key", "")
     assert not mailer.mail_configured()
     assert await mailer.send_email(to="a@b.co", subject="x", html="y") is False
+
+
+# ------------------------------------------------------------- tokens, codes, passwords
+
+
+async def test_verify_email_signs_the_user_in(client: AsyncClient, session: AsyncSession) -> None:
+    await _signup(client)
+    user = await session.scalar(select(User).where(User.email == "ada@example.com"))
+    assert user is not None
+    code = await session.scalar(select(VerificationCode).where(VerificationCode.user_id == user.id))
+    assert code is not None
+    r = await client.post(
+        f"{PREFIX}/verify-email", json={"email": "ada@example.com", "code": code.code}
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {"access_token", "refresh_token", "expires_in"} <= body.keys()
+    me = await client.get(
+        f"{PREFIX}/me", headers={"Authorization": f"Bearer {body['access_token']}"}
+    )
+    assert me.status_code == 200
+    assert me.json()["is_email_verified"] is True
+    # and the refresh token it issued is a real, rotatable session
+    again = await client.post(f"{PREFIX}/refresh", json={"refresh_token": body["refresh_token"]})
+    assert again.status_code == 200
+
+
+async def test_codes_are_four_digits(client: AsyncClient, session: AsyncSession) -> None:
+    await _signup(client)
+    code = await session.scalar(select(VerificationCode))
+    assert code is not None
+    assert len(code.code) == 4 and code.code.isdigit()
+
+
+@pytest.mark.parametrize(
+    ("password", "missing"),
+    [
+        ("Sh0rt!", "at least 8 characters"),
+        ("garden42!", "a capital letter"),
+        ("Gardenxx!", "a number"),
+        ("Garden421", "a special character"),
+    ],
+)
+async def test_signup_names_the_broken_password_rule(
+    client: AsyncClient, password: str, missing: str
+) -> None:
+    r = await client.post(f"{PREFIX}/signup", json={"email": "p@example.com", "password": password})
+    assert r.status_code == 422
+    assert missing in r.text
+
+
+async def test_reset_requires_the_same_password_policy(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await _signup(client)
+    await _verify(client, session, "ada@example.com")
+    code = await auth_service.request_password_reset(session, email="ada@example.com")
+    r = await client.post(
+        f"{PREFIX}/reset-password",
+        json={"email": "ada@example.com", "code": code, "new_password": "weakpass1"},
+    )
+    assert r.status_code == 422
