@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     rate_limit_login_per_5min: int = 10
     rate_limit_code_attempts_per_5min: int = 15
     rate_limit_forgot_per_hour: int = 6
+    rate_limit_speech_per_minute: int = 20
 
     # --- Meta endpoints (Meta models only) ---
     # Chat runs on the Meta Model API (smart/deep tiers) and Baseten, which
@@ -132,8 +133,16 @@ class Settings(BaseSettings):
     # Ceiling from the plan: routing must never spend a model call to decide.
     planner_context_tokens: int = 200_000
 
-    # --- voice (Muse Voice Transcribe; wired in a later phase) ---
+    # --- voice: Meta's Muse Voice Transcribe, the only speech model we use ---
     muse_voice_model: str = ""
+    # Meta documents a realtime WebSocket endpoint (wss://api.meta.ai/v1/asr/realtime). This is
+    # the HTTP file-upload route used for short voice notes; its path and payload have NOT been
+    # confirmed against Meta's docs yet, so it is configurable. Empty derives
+    # "<META_API_BASE_URL>/audio/transcriptions". See app/ai/speech.py.
+    muse_voice_url: str = ""
+    # A voice note is a chat turn, not a recording session.
+    speech_max_bytes: int = 10_000_000
+    speech_timeout_seconds: float = 60.0
 
     # --- phase 2: budgets (per user, per UTC day) ---
     budget_daily_calls: int = 200
