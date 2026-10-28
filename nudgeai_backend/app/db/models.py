@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from datetime import date as dt_date
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -17,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
@@ -268,11 +270,29 @@ class Task(Base):
     )
     title: Mapped[str] = mapped_column(String(320), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    # The moment the task is due (its end time, else start, else the end of its day). It is
+    # derived from date/start/end in the user's zone whenever those are set.
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    priority: Mapped[str] = mapped_column(
+        String(8), default="medium", server_default="medium", nullable=False
+    )
+    # The local calendar day and optional clock range ("HH:MM"); no start means all day.
+    date: Mapped[dt_date | None] = mapped_column(Date)
+    start_time: Mapped[str | None] = mapped_column(String(5))
+    end_time: Mapped[str | None] = mapped_column(String(5))
+    # Stored for the client; recurring instances aren't generated server-side yet.
+    repeat: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (Index("ix_tasks_user_done", "user_id", "done_at"),)
+    __table_args__ = (
+        Index("ix_tasks_user_done", "user_id", "done_at"),
+        Index("ix_tasks_user_date", "user_id", "date"),
+        CheckConstraint("priority IN ('high','medium','low')", name="ck_tasks_priority"),
+    )
 
 
 # =================================================================== nudges

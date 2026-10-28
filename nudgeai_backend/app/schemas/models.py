@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.security import password_problems
 
@@ -227,25 +227,75 @@ class OverallStreakResponse(BaseModel):
 # =================================================================== tasks
 
 
+# A field called ``date`` would shadow the type inside its own class body.
+Day = date
+
+Priority = Literal["high", "medium", "low"]
+TaskStatus = Literal["upcoming", "overdue", "completed"]
+
+
+def _tidy_title(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = " ".join(v.split())
+    if not v:
+        raise ValueError("must not be blank")
+    return v
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=320)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+    priority: Priority = "medium"
+    # Local calendar day; defaults to today where the user is.
+    date: Day | None = None
+    # "HH:MM" local; omit start for an all-day task. End defaults to one hour after start.
+    start_time: TimeStr | None = None
+    end_time: TimeStr | None = None
+    repeat: bool = False
+    # Accepted for the AI tools and older clients: derives date when `date` is absent.
     due_at: datetime | None = None
+
+    _title = field_validator("title")(_tidy_title)
+
+    @model_validator(mode="after")
+    def _times(self) -> TaskCreate:
+        if self.end_time and not self.start_time:
+            raise ValueError("end_time needs a start_time")
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
 
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=320)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+    priority: Priority | None = None
+    date: Day | None = None
+    start_time: TimeStr | None = None
+    end_time: TimeStr | None = None
+    repeat: bool | None = None
     due_at: datetime | None = None
     done_at: datetime | None = None
+
+    _title = field_validator("title")(_tidy_title)
 
 
 class TaskResponse(ORMModel):
     id: UUID
     title: str
     notes: str | None
+    priority: str
+    date: Day | None
+    start_time: str | None
+    end_time: str | None
+    all_day: bool = True
+    repeat: bool
     due_at: datetime | None
     done_at: datetime | None
+    done: bool = False
+    # Derived per request from the clock in the user's zone (not stored).
+    status: TaskStatus = "upcoming"
     created_at: datetime
 
 

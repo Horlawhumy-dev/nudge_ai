@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, SessionDep
-from app.db.models import Habit
+from app.db.models import Habit, Task
 from app.schemas.models import (
     CheckinRequest,
     CompletionsResponse,
@@ -270,24 +270,50 @@ async def overall_streak(user: CurrentUser, session: SessionDep) -> OverallStrea
 # ==================================================================== tasks
 
 
+def _task_out(task: Task, now: datetime) -> TaskResponse:
+    resp = TaskResponse.model_validate(task)
+    resp.all_day = task.start_time is None
+    resp.done = task.done_at is not None
+    resp.status = core_service.task_status(task, now)  # type: ignore[assignment]
+    return resp
+
+
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreate, user: CurrentUser, session: SessionDep) -> TaskResponse:
-    task = await _http(core_service.create_task, session, user.id, **payload.model_dump())
-    return TaskResponse.model_validate(task)
+    task = await _http(core_service.create_task, session, user, **payload.model_dump())
+    return _task_out(task, datetime.now(UTC))
 
 
 @router.get("/tasks", response_model=list[TaskResponse])
 async def list_tasks(
-    user: CurrentUser, session: SessionDep, include_done: bool = False
+    user: CurrentUser,
+    session: SessionDep,
+    include_done: bool = False,
+    status: str | None = Query(
+        default=None,
+        description="all | upcoming | overdue | completed. Omit to hide completed tasks.",
+    ),
+    date_from: date | None = Query(default=None, alias="from"),
+    date_to: date | None = Query(default=None, alias="to"),
 ) -> list[TaskResponse]:
-    tasks = await core_service.list_tasks(session, user.id, include_done=include_done)
-    return [TaskResponse.model_validate(t) for t in tasks]
+    now = datetime.now(UTC)
+    tasks = await _http(
+        core_service.list_tasks,
+        session,
+        user.id,
+        include_done=include_done,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        now=now,
+    )
+    return [_task_out(t, now) for t in tasks]
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
     task = await _http(core_service.get_task, session, user.id, task_id)
-    return TaskResponse.model_validate(task)
+    return _task_out(task, datetime.now(UTC))
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskResponse)
@@ -297,11 +323,30 @@ async def update_task(
     task = await _http(
         core_service.update_task,
         session,
-        user.id,
+        user,
         task_id,
         **payload.model_dump(exclude_unset=True),
     )
-    return TaskResponse.model_validate(task)
+    return _task_out(task, datetime.now(UTC))
+
+
+@router.post("/tasks/{task_id}/complete", response_model=TaskResponse)
+async def complete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
+    task = await _http(core_service.set_task_done, session, user.id, task_id, done=True)
+    return _task_out(task, datetime.now(UTC))
+
+
+@router.post("/tasks/{task_id}/uncomplete", response_model=TaskResponse)
+async def uncomplete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
+    task = await _http(core_service.set_task_done, session, user.id, task_id, done=False)
+    return _task_out(task, datetime.now(UTC))
+
+
+@router.post("/tasks/{task_id}/restore", response_model=TaskResponse)
+async def restore_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
+    """Undo a delete (the mobile "Undo" toast)."""
+    task = await _http(core_service.restore_task, session, user.id, task_id)
+    return _task_out(task, datetime.now(UTC))
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -504,3 +504,143 @@ async def test_overall_streak_counts_any_habit(client: AsyncClient, session: Asy
     streak = (await client.get("/api/v1/streak", headers=h)).json()
     assert streak["current"] == 3 and streak["best"] == 3 and streak["active_today"] is True
     assert streak["last_active_on"] == TODAY.isoformat()
+
+
+# ================================================================ task fields
+
+
+async def _task(client: AsyncClient, headers: dict[str, str], **body: object) -> dict:  # type: ignore[type-arg]
+    r = await client.post(T, json={"title": "Plan sprint", **body}, headers=headers)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+async def test_task_defaults_to_an_all_day_task_today(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-default@example.com")
+    task = await _task(client, h)
+    assert task["priority"] == "medium" and task["repeat"] is False
+    assert task["date"] == TODAY.isoformat()
+    assert task["all_day"] is True and task["start_time"] is None
+    assert task["status"] == "upcoming" and task["done"] is False
+
+
+async def test_task_with_a_time_range_derives_due_in_the_users_zone(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    from zoneinfo import ZoneInfo
+
+    email = "t-zone@example.com"
+    h = await _authed(client, session, email)
+    await _set_zone(session, email, "Asia/Tokyo")
+    day = (TODAY + timedelta(days=3)).isoformat()
+    task = await _task(
+        client, h, date=day, start_time="09:00", end_time="10:45", priority="high", repeat=True
+    )
+    assert task["all_day"] is False and task["priority"] == "high" and task["repeat"] is True
+    due = datetime.fromisoformat(task["due_at"]).astimezone(ZoneInfo("Asia/Tokyo"))
+    assert (due.date().isoformat(), due.strftime("%H:%M")) == (day, "10:45")
+
+
+async def test_end_time_defaults_to_one_hour_and_late_starts_clamp(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-end@example.com")
+    assert (await _task(client, h, start_time="14:30"))["end_time"] == "15:30"
+    assert (await _task(client, h, start_time="23:30"))["end_time"] == "23:59"
+
+
+async def test_task_validation(client: AsyncClient, session: AsyncSession) -> None:
+    h = await _authed(client, session, "t-valid@example.com")
+    for bad in (
+        {"priority": "urgent"},
+        {"end_time": "10:00"},
+        {"start_time": "10:00", "end_time": "09:00"},
+        {"start_time": "25:00"},
+        {"title": "   "},
+    ):
+        r = await client.post(T, json={"title": "X", **bad}, headers=h)
+        assert r.status_code == 422, bad
+
+
+async def test_legacy_due_at_still_works_and_sets_the_day(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-legacy@example.com")
+    due = datetime.now(UTC) + timedelta(days=2, hours=1)
+    task = await _task(client, h, due_at=due.isoformat())
+    assert datetime.fromisoformat(task["due_at"]) == due
+    assert task["date"] == due.date().isoformat()
+
+
+async def test_status_overdue_completed_and_filters(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-status@example.com")
+    yesterday = (TODAY - timedelta(days=1)).isoformat()
+    tomorrow = (TODAY + timedelta(days=1)).isoformat()
+    late = await _task(client, h, title="Late", date=yesterday, start_time="08:00")
+    soon = await _task(client, h, title="Soon", date=tomorrow, start_time="08:00")
+    done = await _task(client, h, title="Done", date=yesterday)
+    await client.post(f"{T}/{done['id']}/complete", headers=h)
+
+    assert late["status"] == "overdue" and soon["status"] == "upcoming"
+
+    def titles(rows: list[dict]) -> list[str]:  # type: ignore[type-arg]
+        return [r["title"] for r in rows]
+
+    async def listing(**params: str) -> list[str]:
+        r = await client.get(T, params=params, headers=h)
+        assert r.status_code == 200, r.text
+        return titles(r.json())
+
+    assert await listing() == ["Late", "Soon"]  # default hides completed, ordered by due
+    assert sorted(await listing(status="all")) == ["Done", "Late", "Soon"]
+    assert await listing(status="overdue") == ["Late"]
+    assert await listing(status="upcoming") == ["Soon"]
+    assert await listing(status="completed") == ["Done"]
+    assert await listing(status="all", **{"from": tomorrow}) == ["Soon"]
+    assert (await client.get(T, params={"status": "bogus"}, headers=h)).status_code == 422
+
+
+async def test_complete_uncomplete_and_restore_a_task(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-cycle@example.com")
+    task = await _task(client, h)
+    done = (await client.post(f"{T}/{task['id']}/complete", headers=h)).json()
+    assert done["done"] is True and done["status"] == "completed" and done["done_at"]
+    again = (await client.post(f"{T}/{task['id']}/complete", headers=h)).json()
+    assert again["done_at"] == done["done_at"]  # idempotent, keeps the original time
+    undone = (await client.post(f"{T}/{task['id']}/uncomplete", headers=h)).json()
+    assert undone["done"] is False and undone["done_at"] is None
+
+    assert (await client.delete(f"{T}/{task['id']}", headers=h)).status_code == 204
+    assert (await client.get(f"{T}/{task['id']}", headers=h)).status_code == 404
+    assert (await client.get(T, params={"status": "all"}, headers=h)).json() == []
+    restored = await client.post(f"{T}/{task['id']}/restore", headers=h)
+    assert restored.status_code == 200 and restored.json()["id"] == task["id"]
+    other = await _authed(client, session, "t-cycle2@example.com")
+    assert (await client.post(f"{T}/{task['id']}/restore", headers=other)).status_code == 404
+
+
+async def test_rescheduling_a_task_recomputes_due(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "t-move@example.com")
+    task = await _task(client, h, start_time="09:00", end_time="10:00")
+    moved = (
+        await client.patch(f"{T}/{task['id']}", json={"start_time": "13:00"}, headers=h)
+    ).json()
+    assert (moved["start_time"], moved["end_time"]) == ("13:00", "14:00")  # end follows start
+
+    all_day = (await client.patch(f"{T}/{task['id']}", json={"start_time": None}, headers=h)).json()
+    assert all_day["all_day"] is True and all_day["end_time"] is None
+
+    bad = await client.patch(
+        f"{T}/{task['id']}", json={"start_time": "15:00", "end_time": "14:00"}, headers=h
+    )
+    assert bad.status_code == 422
+    renamed = await client.patch(f"{T}/{task['id']}", json={"title": "  New   name "}, headers=h)
+    assert renamed.json()["title"] == "New name"

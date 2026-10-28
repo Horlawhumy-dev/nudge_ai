@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -387,8 +387,50 @@ async def overall_streak(
 # ==================================================================== tasks
 
 
-async def create_task(session: AsyncSession, user_id: UUID, **kwargs: Any) -> Task:
-    task = Task(user_id=user_id, **kwargs)
+def _plus_one_hour(hhmm: str) -> str:
+    """ "14:30" -> "15:30"; clamps at 23:59 so a late start never wraps past midnight."""
+    hour, minute = int(hhmm[:2]), int(hhmm[3:])
+    return "23:59" if hour >= 23 else f"{hour + 1:02d}:{minute:02d}"
+
+
+def task_due_at(day: date, start: str | None, end: str | None, zone: ZoneInfo) -> datetime:
+    """The due moment for a task: its end time, else start time, else the end of its day."""
+    clock = end or start or "23:59"
+    local = datetime.combine(day, time(int(clock[:2]), int(clock[3:])), tzinfo=zone)
+    return local.astimezone(UTC)
+
+
+def task_status(task: Task, now: datetime) -> str:
+    if task.done_at is not None:
+        return "completed"
+    if task.due_at is not None and task.due_at < now:
+        return "overdue"
+    return "upcoming"
+
+
+def _check_range(start: str | None, end: str | None) -> None:
+    if end and not start:
+        raise Invalid("end time needs a start time")
+    if start and end and end <= start:
+        raise Invalid("end time must be after the start time")
+
+
+async def create_task(session: AsyncSession, user: User, **kwargs: Any) -> Task:
+    zone = user_zone(user)
+    due_at = kwargs.pop("due_at", None)
+    day = kwargs.pop("date", None)
+    start, end = kwargs.get("start_time"), kwargs.get("end_time")
+    if start and not end:
+        end = kwargs["end_time"] = _plus_one_hour(start)
+    _check_range(start, end)
+
+    if day is None and due_at is not None:
+        # Older clients and the AI tools only know the due moment: keep it, derive the day.
+        day = due_at.astimezone(zone).date()
+    else:
+        day = day or local_today(user)
+        due_at = task_due_at(day, start, end, zone)
+    task = Task(user_id=user.id, date=day, due_at=due_at, **kwargs)
     session.add(task)
     await session.commit()
     await session.refresh(task)
@@ -396,31 +438,103 @@ async def create_task(session: AsyncSession, user_id: UUID, **kwargs: Any) -> Ta
 
 
 async def get_task(session: AsyncSession, user_id: UUID, task_id: UUID) -> Task:
-    task = await session.scalar(select(Task).where(Task.id == task_id, Task.user_id == user_id))
+    task = await session.scalar(
+        select(Task).where(Task.id == task_id, Task.user_id == user_id, Task.deleted_at.is_(None))
+    )
     if task is None:
         raise NotFound("task not found")
     return task
 
 
 async def list_tasks(
-    session: AsyncSession, user_id: UUID, *, include_done: bool = False
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    include_done: bool = False,
+    status: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    now: datetime | None = None,
 ) -> list[Task]:
-    stmt = select(Task).where(Task.user_id == user_id).order_by(Task.created_at.desc())
-    if not include_done:
-        stmt = stmt.where(Task.done_at.is_(None))
+    """A user's live tasks, ordered by due moment (undated last).
+
+    Without ``status`` the old behaviour holds: done tasks are hidden unless ``include_done``.
+    ``status`` is one of all / upcoming / overdue / completed and overrides it.
+    """
+    now = now or datetime.now(UTC)
+    stmt = select(Task).where(Task.user_id == user_id, Task.deleted_at.is_(None))
+    if status in (None, ""):
+        if not include_done:
+            stmt = stmt.where(Task.done_at.is_(None))
+    elif status == "completed":
+        stmt = stmt.where(Task.done_at.is_not(None))
+    elif status == "overdue":
+        stmt = stmt.where(Task.done_at.is_(None), Task.due_at < now)
+    elif status == "upcoming":
+        stmt = stmt.where(Task.done_at.is_(None), (Task.due_at.is_(None)) | (Task.due_at >= now))
+    elif status != "all":
+        raise Invalid("status must be all, upcoming, overdue or completed")
+    if date_from is not None:
+        stmt = stmt.where(Task.date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(Task.date <= date_to)
+    stmt = stmt.order_by(Task.due_at.asc().nulls_last(), Task.created_at.desc())
     return list(await session.scalars(stmt))
 
 
-async def update_task(session: AsyncSession, user_id: UUID, task_id: UUID, **kwargs: Any) -> Task:
+async def update_task(session: AsyncSession, user: User, task_id: UUID, **kwargs: Any) -> Task:
+    task = await get_task(session, user.id, task_id)
+    zone = user_zone(user)
+    schedule_keys = {"date", "start_time", "end_time"}
+    touches_schedule = bool(schedule_keys & kwargs.keys())
+
+    if "due_at" in kwargs and not touches_schedule and kwargs["due_at"] is not None:
+        task.due_at = kwargs.pop("due_at")
+        task.date = task.due_at.astimezone(zone).date()
+    else:
+        kwargs.pop("due_at", None)
+
+    for key in ("title", "priority", "repeat", "notes", "done_at"):
+        if key in kwargs and (kwargs[key] is not None or key in ("notes", "done_at")):
+            setattr(task, key, kwargs[key])
+
+    if touches_schedule:
+        day = kwargs["date"] if kwargs.get("date") is not None else task.date
+        start = kwargs["start_time"] if "start_time" in kwargs else task.start_time
+        end = kwargs["end_time"] if "end_time" in kwargs else task.end_time
+        if start is None:
+            end = None  # all-day tasks have no range
+        elif "end_time" not in kwargs and "start_time" in kwargs:
+            end = _plus_one_hour(start)  # moving the start moves the end with it
+        _check_range(start, end)
+        day = day or local_today(user)
+        task.date, task.start_time, task.end_time = day, start, end
+        task.due_at = task_due_at(day, start, end, zone)
+    await session.commit()
+    await session.refresh(task)
+    return task
+
+
+async def set_task_done(session: AsyncSession, user_id: UUID, task_id: UUID, *, done: bool) -> Task:
     task = await get_task(session, user_id, task_id)
-    for key, value in kwargs.items():
-        setattr(task, key, value)
+    task.done_at = (task.done_at or datetime.now(UTC)) if done else None
     await session.commit()
     await session.refresh(task)
     return task
 
 
 async def delete_task(session: AsyncSession, user_id: UUID, task_id: UUID) -> None:
+    """Soft delete, so the mobile "Undo" can bring it back."""
     task = await get_task(session, user_id, task_id)
-    await session.delete(task)
+    task.deleted_at = datetime.now(UTC)
     await session.commit()
+
+
+async def restore_task(session: AsyncSession, user_id: UUID, task_id: UUID) -> Task:
+    task = await session.scalar(select(Task).where(Task.id == task_id, Task.user_id == user_id))
+    if task is None:
+        raise NotFound("task not found")
+    task.deleted_at = None
+    await session.commit()
+    await session.refresh(task)
+    return task
