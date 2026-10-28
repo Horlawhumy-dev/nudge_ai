@@ -22,6 +22,7 @@ import { useNow } from '@/hooks/useNow';
 import { formatLongDate } from '@/lib/format';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors } from '@/theme';
+import { refreshData } from '@/services/sync';
 
 const FILTERS: readonly TaskFilter[] = ['All', 'Completed', 'Upcoming', 'Overdue'];
 
@@ -50,6 +51,7 @@ export default function Tasks() {
   return (
     <Screen
       scroll
+      onRefresh={refreshData}
       background={colors.background}
       bottomInset={clearance + 40}
       contentStyle={styles.content}

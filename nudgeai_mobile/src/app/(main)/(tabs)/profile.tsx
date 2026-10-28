@@ -19,6 +19,7 @@ import { UserAvatar } from '@/features/auth/components/UserAvatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { colors, radius } from '@/theme';
+import { refreshData } from '@/services/sync';
 
 export default function Profile() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function Profile() {
   return (
     <Screen
       scroll
+      onRefresh={refreshData}
       background={colors.background}
       bottomInset={clearance}
       contentStyle={styles.content}

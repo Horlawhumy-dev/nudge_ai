@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Pressable, SectionList, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { AiOrb, EmptyState, Icon, Screen, Text } from '@/components/ui';
@@ -16,6 +16,8 @@ import { haptics } from '@/lib/haptics';
 import { useChatStore } from '@/store/useChatStore';
 import { toast } from '@/store/useToastStore';
 import { colors, radius } from '@/theme';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
+import { refreshData } from '@/services/sync';
 
 function ConversationRow({
   item,
@@ -65,6 +67,7 @@ function ConversationRow({
 export default function ChatHistory() {
   const router = useRouter();
   const now = useNow();
+  const pull = usePullRefresh(refreshData);
   const conversations = useChatStore((s) => s.conversations);
   const openConversation = useChatStore((s) => s.openConversation);
   const startNew = useChatStore((s) => s.startNew);
@@ -104,6 +107,14 @@ export default function ChatHistory() {
       />
       <SectionList
         sections={sections}
+        refreshControl={
+          <RefreshControl
+            refreshing={pull.refreshing}
+            onRefresh={() => void pull.onRefresh()}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         keyExtractor={(c) => c.id}
         renderSectionHeader={({ section }) => (
           <Text variant="bodyLarge" color={colors.textSecondary} style={styles.section}>

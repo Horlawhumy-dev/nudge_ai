@@ -15,6 +15,7 @@ import type { ProgressPeriod, ProgressTab } from '@/features/progress/types';
 import { useHabitProgress, useTaskProgress } from '@/features/progress/useProgress';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { colors, fonts } from '@/theme';
+import { refreshData } from '@/services/sync';
 
 const TABS = [
   { key: 'habits', label: 'Habits' },
@@ -34,10 +35,15 @@ export default function Progress() {
   const habit = habitsView.data;
   const task = tasksView.data;
   const view = tab === 'habits' ? habitsView : tasksView;
+  const refreshProgress = async () => {
+    await refreshData();
+    await (tab === 'habits' ? habitsView : tasksView).reload();
+  };
 
   return (
     <Screen
       scroll
+      onRefresh={refreshProgress}
       background={colors.background}
       bottomInset={clearance}
       contentStyle={styles.content}

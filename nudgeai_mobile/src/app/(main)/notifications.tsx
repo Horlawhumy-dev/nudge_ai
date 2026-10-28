@@ -28,7 +28,7 @@ export default function Notifications() {
   const groups = groupNotifications(items, now);
 
   return (
-    <Screen scroll background={colors.background} contentStyle={styles.content}>
+    <Screen scroll background={colors.background} contentStyle={styles.content} onRefresh={refresh}>
       <ScreenHeader
         title="Notifications"
         subtitle={unread > 0 ? `${unread} unread` : undefined}

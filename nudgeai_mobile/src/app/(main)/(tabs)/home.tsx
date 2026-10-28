@@ -23,6 +23,7 @@ import { useHabitsStore } from '@/store/useHabitsStore';
 import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors } from '@/theme';
+import { refreshData } from '@/services/sync';
 
 export default function Home() {
   const clearance = useTabBarClearance();
@@ -48,6 +49,7 @@ export default function Home() {
   return (
     <Screen
       scroll
+      onRefresh={refreshData}
       background={colors.background}
       bottomInset={clearance + 40}
       contentStyle={styles.content}

@@ -13,6 +13,7 @@ import { StatPill } from '@/features/habits/components/StatPill';
 import { overallStreak } from '@/features/habits/streak';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { colors } from '@/theme';
+import { refreshData } from '@/services/sync';
 
 export default function Habits() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function Habits() {
   return (
     <Screen
       scroll
+      onRefresh={refreshData}
       background={colors.background}
       bottomInset={clearance + 40}
       contentStyle={styles.content}

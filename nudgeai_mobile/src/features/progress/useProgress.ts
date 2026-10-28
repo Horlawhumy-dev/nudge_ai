@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { DEMO_MODE } from '@/constants/env';
 import {
@@ -24,6 +24,8 @@ import {
 import type { ProgressPeriod } from './types';
 
 export type Remote<T> = {
+  /** Fetch again now (pull-to-refresh). Resolves when done; rejects if the fetch failed. */
+  reload: () => Promise<void>;
   data: T | null;
   /** First load for this view: nothing to show yet. */
   loading: boolean;
@@ -44,6 +46,8 @@ function useServerView<T>(
 ): Omit<Remote<T>, 'sample'> {
   const [settled, setSettled] = useState<{ key: string; error: boolean } | null>(null);
   const [, bump] = useState(0);
+  const [reloads, setReloads] = useState(0);
+  const waiting = useRef<{ resolve: () => void; reject: (e: unknown) => void }[]>([]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -51,12 +55,14 @@ function useServerView<T>(
     fetcher().then(
       (value) => {
         cache.set(key, value);
+        waiting.current.splice(0).forEach((w) => w.resolve());
         if (!cancelled) {
           setSettled({ key, error: false });
           bump((n) => n + 1);
         }
       },
-      () => {
+      (e: unknown) => {
+        waiting.current.splice(0).forEach((w) => w.reject(e));
         if (!cancelled) setSettled({ key, error: true });
       }
     );
@@ -65,11 +71,22 @@ function useServerView<T>(
     };
     // `fetcher` is rebuilt every render; the key and refreshOn say when to fetch again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, enabled, refreshOn]);
+  }, [key, enabled, refreshOn, reloads]);
 
   const data = (cache.get(key) as T | undefined) ?? null;
   const mine = settled?.key === key ? settled : null;
-  return { data, loading: enabled && data === null && mine === null, error: mine?.error ?? false };
+  const reload = () =>
+    new Promise<void>((resolve, reject) => {
+      if (!enabled) return resolve();
+      waiting.current.push({ resolve, reject });
+      setReloads((n) => n + 1);
+    });
+  return {
+    data,
+    loading: enabled && data === null && mine === null,
+    error: mine?.error ?? false,
+    reload,
+  };
 }
 
 /** Habit progress. From the server for an account; sample figures in demo mode. */
@@ -103,6 +120,7 @@ export function useHabitProgress(
     loading: false,
     error: false,
     sample: true,
+    reload: async () => undefined,
   };
 }
 
@@ -130,5 +148,6 @@ export function useTaskProgress(
     loading: false,
     error: false,
     sample: true,
+    reload: async () => undefined,
   };
 }

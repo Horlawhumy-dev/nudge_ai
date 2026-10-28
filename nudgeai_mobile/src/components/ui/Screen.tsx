@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -10,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
+import { usePullRefresh } from '@/hooks/usePullRefresh';
 import { colors, gutter } from '@/theme';
 
 type ScreenProps = {
@@ -25,6 +27,8 @@ type ScreenProps = {
   /** Drop the safe-area top padding (screens that draw their own full-bleed header). */
   edgeToEdge?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
+  /** Enables pull-down-to-refresh on a scrolling screen. Resolve when the data is up to date. */
+  onRefresh?: () => Promise<unknown>;
 };
 
 export function Screen({
@@ -36,7 +40,9 @@ export function Screen({
   bottomInset = 0,
   edgeToEdge = false,
   contentStyle,
+  onRefresh,
 }: ScreenProps) {
+  const pull = usePullRefresh(onRefresh);
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const padded = [
@@ -60,6 +66,16 @@ export function Screen({
             contentContainerStyle={padded}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  refreshing={pull.refreshing}
+                  onRefresh={() => void pull.onRefresh()}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              ) : undefined
+            }
           >
             {children}
           </ScrollView>

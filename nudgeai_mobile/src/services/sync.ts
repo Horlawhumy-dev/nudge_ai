@@ -122,3 +122,9 @@ export function startPreferenceSync(): () => void {
     unsubscribe();
   };
 }
+
+/** What pull-to-refresh runs: re-download everything for a server account; nothing to do in demo mode. */
+export async function refreshData(): Promise<void> {
+  if (DEMO_MODE) return;
+  await syncData();
+}
