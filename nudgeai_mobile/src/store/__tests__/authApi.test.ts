@@ -162,4 +162,33 @@ describe('auth store with a backend', () => {
     await useAuthStore.getState().restoreSession();
     expect(useAuthStore.getState().status).toBe('ready');
   });
+
+  it('shows the new photo at once and puts the old one back if the upload fails', async () => {
+    useAuthStore.setState({
+      status: 'ready',
+      user: { id: 'u1', name: 'Ada', email: 'a@b.co', avatarUri: 'https://old/photo.jpg' },
+    });
+    profile.uploadAvatar.mockImplementation(async () => {
+      expect(useAuthStore.getState().user?.avatarUri).toBe('file:///new.jpg'); // already on screen
+      throw new ApiError('we couldn’t save your photo just now, please try again', 503);
+    });
+    await expect(useAuthStore.getState().changePhoto('file:///new.jpg')).rejects.toThrow(
+      /try again/
+    );
+    expect(useAuthStore.getState().user?.avatarUri).toBe('https://old/photo.jpg');
+  });
+
+  it('keeps the server’s photo URLs once the upload succeeds', async () => {
+    useAuthStore.setState({ status: 'ready', user: { id: 'u1', name: 'Ada', email: 'a@b.co' } });
+    profile.uploadAvatar.mockResolvedValue({
+      ...apiUser,
+      avatar_url: 'https://cdn/full.jpg',
+      avatar_thumb_url: 'https://cdn/thumb.jpg',
+    });
+    await useAuthStore.getState().changePhoto('file:///new.jpg');
+    expect(useAuthStore.getState().user).toMatchObject({
+      avatarUri: 'https://cdn/full.jpg',
+      avatarThumbUri: 'https://cdn/thumb.jpg',
+    });
+  });
 });

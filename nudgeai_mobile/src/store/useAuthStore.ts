@@ -104,6 +104,10 @@ type AuthState = {
   resetPassword: (password: string) => Promise<void>;
   completeOnboarding: (nickname: string) => void;
   updateProfile: (patch: Partial<Pick<User, 'name' | 'email' | 'avatarUri'>>) => void;
+  /** Save the name to the account. Resolves once the server has it (immediately in demo mode). */
+  saveName: (name: string) => Promise<void>;
+  /** Show the chosen photo at once, upload it, and put the old one back if that fails. */
+  changePhoto: (uri: string, onProgress?: (fraction: number) => void) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -331,6 +335,52 @@ export const useAuthStore = create<AuthState>()(
       },
 
       updateProfile: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
+
+      saveName: async (name) => {
+        if (DEMO_MODE) {
+          get().updateProfile({ name });
+          return;
+        }
+        try {
+          const saved = await profileApi.update({ name });
+          get().updateProfile({ name: saved.name ?? name });
+        } catch (e) {
+          throw authError(e);
+        }
+      },
+
+      changePhoto: async (uri, onProgress) => {
+        const before = get().user;
+        get().updateProfile({ avatarUri: uri });
+        if (DEMO_MODE) return;
+        try {
+          const saved = await profileApi.uploadAvatar(uri, onProgress);
+          set((s) =>
+            s.user
+              ? {
+                  user: {
+                    ...s.user,
+                    avatarUri: saved.avatar_url ?? undefined,
+                    avatarThumbUri: saved.avatar_thumb_url ?? undefined,
+                  },
+                }
+              : s
+          );
+        } catch (e) {
+          set((s) =>
+            s.user
+              ? {
+                  user: {
+                    ...s.user,
+                    avatarUri: before?.avatarUri,
+                    avatarThumbUri: before?.avatarThumbUri,
+                  },
+                }
+              : s
+          );
+          throw authError(e);
+        }
+      },
 
       signOut: async () => {
         if (!DEMO_MODE) await authApi.logOut();

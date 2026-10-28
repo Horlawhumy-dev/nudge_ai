@@ -1,8 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { DEMO_MODE } from '@/constants/env';
 import { Icon, Screen, ScreenHeader, Text, TextField } from '@/components/ui';
 import { UserAvatar } from '@/features/auth/components/UserAvatar';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -17,25 +18,42 @@ export default function EditProfile() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const updateProfile = useAuthStore((s) => s.updateProfile);
+  const saveName = useAuthStore((s) => s.saveName);
+  const changePhoto = useAuthStore((s) => s.changePhoto);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<number | null>(null);
   const name = useField(user?.name ?? '', validateFullName);
   const email = useField(user?.email ?? '', validateEmail);
   const emailRef = useRef<TextInput>(null);
 
-  const dirty = name.value.trim() !== user?.name || email.value.trim() !== user?.email;
-  const canSave = dirty && name.valid && email.valid;
+  // With an account on the server, changing the email needs a confirmation code (not built yet),
+  // so only the static demo lets it be edited here.
+  const emailEditable = DEMO_MODE;
+  const dirty =
+    name.value.trim() !== user?.name || (emailEditable && email.value.trim() !== user?.email);
+  const canSave = dirty && name.valid && (email.valid || !emailEditable) && !saving;
   const guard = useDiscardGuard(dirty);
 
-  const save = () => {
+  const save = async () => {
     if (!canSave) {
       name.touch();
       email.touch();
       return;
     }
-    updateProfile({ name: name.value.trim().replace(/\s+/g, ' '), email: email.value.trim() });
-    haptics.success();
-    toast.success('Profile updated');
-    guard.allowLeave();
-    router.back();
+    const cleanName = name.value.trim().replace(/\s+/g, ' ');
+    setSaving(true);
+    try {
+      await saveName(cleanName);
+      if (emailEditable) updateProfile({ email: email.value.trim() });
+      haptics.success();
+      toast.success('Profile updated');
+      guard.allowLeave();
+      router.back();
+    } catch (e) {
+      haptics.warning();
+      toast.error(e instanceof Error ? e.message : 'Couldn’t save your profile. Try again.');
+      setSaving(false);
+    }
   };
 
   const pickPhoto = async () => {
@@ -47,8 +65,15 @@ export default function EditProfile() {
         quality: 0.6,
       });
       if (!result.canceled && result.assets[0]) {
-        updateProfile({ avatarUri: result.assets[0].uri });
-        toast.success('Profile photo updated');
+        setUploading(0);
+        try {
+          await changePhoto(result.assets[0].uri, setUploading);
+          toast.success('Profile photo updated');
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Couldn’t upload your photo. Try again.');
+        } finally {
+          setUploading(null);
+        }
       }
     } catch {
       toast.error('Couldn’t open your photos.');
@@ -64,7 +89,7 @@ export default function EditProfile() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !canSave }}
             disabled={!canSave}
-            onPress={save}
+            onPress={() => void save()}
             hitSlop={10}
           >
             <Text variant="subheading" color={canSave ? colors.primary : colors.textMuted}>
@@ -76,12 +101,19 @@ export default function EditProfile() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Change photo"
+        disabled={uploading !== null}
         onPress={() => void pickPhoto()}
         style={styles.photo}
       >
         <UserAvatar size={84} />
         <View style={styles.camera}>
-          <Icon name="camera-outline" size={26} color={colors.white} />
+          {uploading === null ? (
+            <Icon name="camera-outline" size={26} color={colors.white} />
+          ) : (
+            <Text variant="caption" color={colors.white}>
+              {Math.round(uploading * 100)}%
+            </Text>
+          )}
         </View>
       </Pressable>
       <TextField
@@ -102,7 +134,8 @@ export default function EditProfile() {
         autoComplete="email"
         inputRef={emailRef}
         returnKeyType="done"
-        onSubmitEditing={save}
+        editable={emailEditable}
+        onSubmitEditing={() => void save()}
       />
       <Pressable
         accessibilityRole="button"
