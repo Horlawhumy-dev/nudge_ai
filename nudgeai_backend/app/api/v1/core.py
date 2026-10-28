@@ -11,8 +11,10 @@ from app.api.deps import CurrentUser, SessionDep
 from app.core.config import get_settings
 from app.db.models import Habit, OnboardingProfile, Task
 from app.schemas.models import (
+    AppFeedbackResponse,
     CheckinRequest,
     CompletionsResponse,
+    FeedbackCreate,
     HabitCreate,
     HabitResponse,
     HabitUpdate,
@@ -30,7 +32,7 @@ from app.schemas.models import (
     TaskUpdate,
     UserResponse,
 )
-from app.services import core_service, media_service, plan_service
+from app.services import account_service, core_service, media_service, plan_service
 from app.services.core_service import Conflict, Invalid, NotFound
 
 router = APIRouter(tags=["core"])
@@ -476,3 +478,28 @@ async def put_subscription(
         raise HTTPException(status_code=501, detail="plan changes need the billing provider")
     await plan_service.switch(session, user, plan=payload.plan, period=payload.period)
     return await plan_service.current(session, user, today=core_service.local_today(user))
+
+
+# ========================================================= feedback and export
+
+
+@router.post("/feedback", response_model=AppFeedbackResponse, status_code=status.HTTP_201_CREATED)
+async def send_feedback(
+    payload: FeedbackCreate, user: CurrentUser, session: SessionDep
+) -> AppFeedbackResponse:
+    """Settings -> Send feedback, and the star rating from Rate Nudge."""
+    row = await account_service.add_feedback(session, user, payload)
+    return AppFeedbackResponse(id=row.id, message="thanks, your feedback helps shape Nudge")
+
+
+@router.get("/account/export")
+async def export_account(user: CurrentUser, session: SessionDep) -> Response:
+    """Download everything the app holds about you ("Download my data")."""
+    import json
+
+    data = await account_service.export_data(session, user)
+    return Response(
+        content=json.dumps(data, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="nudge-data.json"'},
+    )

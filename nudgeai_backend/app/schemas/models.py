@@ -565,6 +565,37 @@ class DeviceResponse(ORMModel):
     created_at: datetime
 
 
+# ============================================================= feedback & export
+
+
+class FeedbackCreate(BaseModel):
+    category: Literal["bug", "idea", "praise", "other", "rating"]
+    message: str | None = Field(default=None, max_length=2000)
+    stars: int | None = Field(default=None, ge=1, le=5)
+    # Sent only when the user leaves "Include app info" on.
+    app_version: str | None = Field(default=None, max_length=32)
+    platform: Literal["ios", "android", "web"] | None = None
+
+    @model_validator(mode="after")
+    def _shape(self) -> FeedbackCreate:
+        text = (self.message or "").strip()
+        if self.category == "rating":
+            if self.stars is None:
+                raise ValueError("a rating needs stars")
+        else:
+            if len(text) < 10:
+                raise ValueError("tell us a little more (at least 10 characters)")
+            if self.stars is not None:
+                raise ValueError("stars are only for ratings")
+        self.message = text or None
+        return self
+
+
+class AppFeedbackResponse(BaseModel):
+    id: UUID
+    message: str
+
+
 # ================================================================ subscription
 
 

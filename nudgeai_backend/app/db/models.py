@@ -496,6 +496,35 @@ class Subscription(Base):
     user: Mapped[User] = relationship(back_populates="subscription")
 
 
+# ================================================================= feedback
+
+
+class Feedback(Base):
+    """Messages and ratings sent from Settings. Kept for the team; never shown to other users."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    stars: Mapped[int | None] = mapped_column(Integer)
+    app_version: Mapped[str | None] = mapped_column(String(32))
+    platform: Mapped[str | None] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "category in ('bug','idea','praise','other','rating')", name="ck_feedback_category"
+        ),
+        CheckConstraint("stars is null or stars between 1 and 5", name="ck_feedback_stars"),
+    )
+
+
 # =================================================================== chat
 
 
