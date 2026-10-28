@@ -8,13 +8,14 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from app.api.deps import CurrentUser, SessionDep
-from app.db.models import Habit, Task
+from app.db.models import Habit, OnboardingProfile, Task
 from app.schemas.models import (
     CheckinRequest,
     CompletionsResponse,
     HabitCreate,
     HabitResponse,
     HabitUpdate,
+    OnboardingPatch,
     OnboardingRequest,
     OnboardingResponse,
     OverallStreakResponse,
@@ -104,23 +105,66 @@ async def remove_avatar(user: CurrentUser, session: SessionDep) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
+async def _onboarding(user: CurrentUser, session: SessionDep) -> OnboardingProfile:
+    profile = user.onboarding
+    if profile is None:
+        profile = OnboardingProfile(user_id=user.id)
+        session.add(profile)
+    return profile
+
+
+def _onboarding_out(profile: OnboardingProfile, user: CurrentUser) -> OnboardingResponse:
+    """The name is the account's, not a column on the profile."""
+    return OnboardingResponse(
+        name=user.name,
+        wake_time=profile.wake_time,
+        sleep_time=profile.sleep_time,
+        goals=profile.goals,
+        nudge_style=profile.nudge_style,
+        tone=profile.tone,
+        completed=profile.completed,
+    )
+
+
+def _sync_tone(user: CurrentUser, style: str | None) -> None:
+    """The tone picked in setup is also the live "AI voice & tone" setting."""
+    if style in ("gentle", "firm", "mix") and user.preferences is not None:
+        user.preferences.reminder_tone = style
+
+
 @router.put("/onboarding", response_model=OnboardingResponse)
 async def put_onboarding(
     payload: OnboardingRequest, user: CurrentUser, session: SessionDep
 ) -> OnboardingResponse:
-    profile = user.onboarding
-    if profile is None:
-        from app.db.models import OnboardingProfile
-
-        profile = OnboardingProfile(user_id=user.id)
-        session.add(profile)
-    for key, value in payload.model_dump().items():
+    """Replace the onboarding answers (fields left out reset to their defaults)."""
+    profile = await _onboarding(user, session)
+    for key, value in payload.model_dump(exclude={"name"}).items():
         setattr(profile, key, value)
     if payload.name:
         user.name = payload.name
+    _sync_tone(user, payload.nudge_style)
     await session.commit()
     await session.refresh(profile)
-    return OnboardingResponse.model_validate(profile)
+    return _onboarding_out(profile, user)
+
+
+@router.patch("/onboarding", response_model=OnboardingResponse)
+async def patch_onboarding(
+    payload: OnboardingPatch, user: CurrentUser, session: SessionDep
+) -> OnboardingResponse:
+    """Change only the onboarding answers that were sent."""
+    profile = await _onboarding(user, session)
+    changes = payload.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        if key == "name" or (value is None and key in ("goals", "completed")):
+            continue  # the name lives on the user; these columns can't be NULL
+        setattr(profile, key, value)
+    if changes.get("name"):
+        user.name = changes["name"]
+    _sync_tone(user, changes.get("nudge_style"))
+    await session.commit()
+    await session.refresh(profile)
+    return _onboarding_out(profile, user)
 
 
 @router.get("/preferences", response_model=PreferenceResponse)
@@ -136,6 +180,7 @@ async def get_preferences(user: CurrentUser, session: SessionDep) -> PreferenceR
     return PreferenceResponse.model_validate(prefs)
 
 
+@router.patch("/preferences", response_model=PreferenceResponse)
 @router.put("/preferences", response_model=PreferenceResponse)
 async def put_preferences(
     payload: PreferenceUpdate, user: CurrentUser, session: SessionDep

@@ -20,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -383,8 +384,49 @@ class Preference(Base):
     quiet_repeat_days: Mapped[list[int] | None] = mapped_column(JSONB)
     digest_time: Mapped[str | None] = mapped_column(String(5))
     voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Notification switches (Settings -> Notification).
+    push_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    morning_summary_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    weekly_report_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    streak_alerts_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    # Quiet hours extras: the window itself is quiet_start/quiet_end/quiet_repeat_days.
+    quiet_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    # Reserved for task nudges (the engine only nudges habits today).
+    quiet_allow_priority: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    # AI voice & tone.
+    reminder_tone: Mapped[str] = mapped_column(
+        String(8), default="gentle", server_default="gentle", nullable=False
+    )
+    use_name_in_reminders: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    include_streak_in_reminders: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    use_emojis_in_reminders: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    habit_stacking_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     max_nudges_per_day: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("reminder_tone IN ('gentle','firm','mix')", name="ck_pref_tone"),
+    )
 
     user: Mapped[User] = relationship(back_populates="preferences")
 

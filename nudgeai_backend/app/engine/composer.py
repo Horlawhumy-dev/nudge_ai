@@ -51,7 +51,7 @@ async def _compose(
     tone: str | None,
 ) -> Composed:
     if tone:
-        system = f"{system} The user asked for a {tone} tone."
+        system = f"{system} Style for this message: {tone}."
     spec = spec_for("fast")
     reply = await model_client.complete(
         spec,

@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.tone import style_for
 from app.db.models import (
     Habit,
     HabitCompletion,
@@ -46,6 +47,29 @@ class UserContext:
 class CandidateBundle:
     user: UserContext
     candidates: tuple[NudgeCandidate, ...]
+
+
+def effective_quiet(prefs: Preference | None, local_now: datetime) -> tuple[str | None, str | None]:
+    """The quiet window that applies right now, or (None, None) when there isn't one.
+
+    Off when the user turned quiet hours off, or when today isn't one of the chosen days
+    (``quiet_repeat_days``, Monday=0; empty or unset means every day). A window that wraps
+    past midnight belongs to the day it *started*, so at 02:00 Tuesday the Monday-night
+    window is the one that counts.
+    """
+    if prefs is None or not prefs.quiet_enabled:
+        return None, None
+    start, end = prefs.quiet_start, prefs.quiet_end
+    days = prefs.quiet_repeat_days
+    if start and end and days:
+        wraps = start > end
+        in_early_part = wraps and local_now.strftime("%H:%M") < end
+        weekday = (
+            (local_now - timedelta(days=1)).weekday() if in_early_part else local_now.weekday()
+        )
+        if weekday not in days:
+            return None, None
+    return start, end
 
 
 def to_local(now_utc: datetime, tzname: str) -> datetime:
@@ -78,7 +102,12 @@ async def load_candidates(
     profile = await session.scalar(
         select(OnboardingProfile).where(OnboardingProfile.user_id == user_id)
     )
-    tone = profile.tone or profile.nudge_style if profile is not None else None
+    # Prefer the live "AI voice & tone" settings; fall back to what onboarding captured.
+    tone = (
+        style_for(prefs)
+        if prefs is not None
+        else ((profile.tone or profile.nudge_style) if profile is not None else None)
+    )
 
     tzname = prefs.timezone if prefs and prefs.timezone else (user.timezone or "UTC")
     local_now = to_local(now, tzname)
@@ -86,9 +115,13 @@ async def load_candidates(
     day_start_utc = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
 
     max_per_day = prefs.max_nudges_per_day if prefs else 6
-    digest_time = prefs.digest_time if prefs else None
-    quiet_start = prefs.quiet_start if prefs else None
-    quiet_end = prefs.quiet_end if prefs else None
+    # The morning summary is the digest: switching it off switches the digest off.
+    digest_time = prefs.digest_time if prefs and prefs.morning_summary_enabled else None
+    quiet_start, quiet_end = effective_quiet(prefs, local_now)
+    push_enabled = prefs.push_enabled if prefs else True
+    streak_alerts = prefs.streak_alerts_enabled if prefs else True
+    stacking_on = prefs.habit_stacking_enabled if prefs else True
+    use_name = prefs.use_name_in_reminders if prefs else True
 
     stmt = (
         select(Habit)
@@ -100,7 +133,7 @@ async def load_candidates(
     habits = list(await session.scalars(stmt))
     if not habits:
         return CandidateBundle(
-            user=_context(user, tone, tzname, local_now, max_per_day, digest_time),
+            user=_context(user, tone, tzname, local_now, max_per_day, digest_time, use_name),
             candidates=(),
         )
 
@@ -156,7 +189,12 @@ async def load_candidates(
     ordered = sorted(habits, key=lambda h: h.stack_position)
     cue_done: dict[UUID, bool] = {}
     for i, habit in enumerate(ordered):
-        if i == 0 or habit.stack_position <= 0:
+        if not stacking_on:
+            cue_done[habit.id] = True
+        elif habit.stacked_after_id is not None:
+            # An explicit link wins: wait for exactly the habit it was stacked after.
+            cue_done[habit.id] = completions.get(habit.stacked_after_id, 0) > 0
+        elif i == 0 or habit.stack_position <= 0:
             cue_done[habit.id] = True
         else:
             cue_done[habit.id] = completions.get(ordered[i - 1].id, 0) > 0
@@ -186,10 +224,12 @@ async def load_candidates(
                 digest_time=digest_time,
                 due_siblings=max(0, incomplete - own_incomplete),
                 streak_current=streaks.get(habit.id, 0),
+                push_enabled=push_enabled,
+                streak_alerts=streak_alerts,
             )
         )
     return CandidateBundle(
-        user=_context(user, tone, tzname, local_now, max_per_day, digest_time),
+        user=_context(user, tone, tzname, local_now, max_per_day, digest_time, use_name),
         candidates=tuple(candidates),
     )
 
@@ -201,10 +241,12 @@ def _context(
     local_now: datetime,
     max_per_day: int,
     digest_time: str | None,
+    use_name: bool = True,
 ) -> UserContext:
+    first = user.name.split()[0] if user.name and user.name.split() else None
     return UserContext(
         user_id=user.id,
-        name=user.name,
+        name=first if use_name else None,
         tone=tone,
         timezone=tzname,
         plan=user.plan,

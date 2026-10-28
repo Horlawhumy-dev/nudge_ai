@@ -42,13 +42,14 @@ def test_plain_due_habit_is_allowed() -> None:
     d = evaluate(cand())
     assert d.allowed
     assert d.verdict.rule == "all_rules_passed"
-    assert len(d.log) == 8  # 7 passes + the terminal allow
+    assert len(d.log) == 9  # 8 passes + the terminal allow
 
 
 def test_log_records_every_rule_that_ran() -> None:
     d = evaluate(cand())
     names = [e.rule for e in d.log]
     assert names == [
+        "respects_push_setting",
         "respects_plan_tier",
         "avoids_nag",
         "respects_quiet_hours",
@@ -232,6 +233,7 @@ def test_first_rule_wins_over_later_ones() -> None:
     )
     assert d.verdict.rule == "respects_quiet_hours"
     assert [e.rule for e in d.log] == [
+        "respects_push_setting",
         "respects_plan_tier",
         "avoids_nag",
         "respects_quiet_hours",
@@ -242,3 +244,29 @@ def test_each_candidate_is_independent() -> None:
     other = cand(habit_id=uuid4(), habit_name="Other", completions_today=1)
     assert evaluate(cand()).allowed
     assert not evaluate(other).allowed
+
+
+# ------------------------------------------------------- user settings
+
+
+def test_push_off_suppresses_everything() -> None:
+    d = evaluate(cand(push_enabled=False))
+    assert not d.allowed
+    assert d.verdict.action == "suppress" and d.verdict.rule == "respects_push_setting"
+    assert [e.rule for e in d.log] == ["respects_push_setting"]
+
+
+def test_streak_alerts_off_disables_the_early_streak_nudge() -> None:
+    risky = cand(streak_current=5, completions_today=0, now=at(STREAK_GUARD_HOUR + 1))
+    assert protects_streak(risky) is not None
+    assert (
+        protects_streak(cand(streak_alerts=False, streak_current=5, now=at(STREAK_GUARD_HOUR + 1)))
+        is None
+    )
+    # the habit still nudges normally; only the "streak at risk" priority path is off
+    assert (
+        evaluate(
+            cand(streak_alerts=False, streak_current=5, now=at(STREAK_GUARD_HOUR + 1))
+        ).verdict.rule
+        == "all_rules_passed"
+    )

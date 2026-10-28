@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.ai import proposals as proposals_mod
 from app.ai.prompts import build_messages
+from app.ai.tone import style_for
 from app.api.deps import CurrentUser, SessionDep
 from app.core import metrics
 from app.core.config import get_settings
@@ -88,7 +89,7 @@ async def _load_history(session: Any, user_id: UUID, limit: int) -> list[dict[st
 
 async def _tone(session: Any, user_id: UUID) -> str | None:
     pref = await session.scalar(select(Preference).where(Preference.user_id == user_id))
-    return getattr(pref, "tone", None) if pref else None
+    return style_for(pref)
 
 
 async def _persist(

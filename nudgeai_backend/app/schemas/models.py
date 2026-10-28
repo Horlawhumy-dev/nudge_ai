@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -15,6 +16,16 @@ Frequency = Literal["daily", "weekdays", "weekly"]
 
 # Check-ins per rolling week implied by a cadence, unless the client sets its own goal.
 GOAL_DAYS_BY_FREQUENCY: dict[str, int] = {"daily": 7, "weekdays": 5, "weekly": 1}
+
+
+def _check_zone(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("unknown time zone") from exc
+    return value
 
 
 def _check_password(value: str) -> str:
@@ -144,15 +155,7 @@ class ProfileUpdate(BaseModel):
     @field_validator("timezone")
     @classmethod
     def _real_zone(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-        try:
-            ZoneInfo(v)
-        except (ZoneInfoNotFoundError, ValueError) as exc:
-            raise ValueError("unknown time zone") from exc
-        return v
+        return _check_zone(v)
 
 
 # =============================================================== onboarding
@@ -166,6 +169,18 @@ class OnboardingRequest(BaseModel):
     nudge_style: str | None = Field(default="gentle", max_length=32)
     tone: str | None = Field(default="warm", max_length=32)
     completed: bool = False
+
+
+class OnboardingPatch(BaseModel):
+    """Partial update: only the fields sent change (Settings edits wake or sleep time alone)."""
+
+    name: str | None = Field(default=None, max_length=120)
+    wake_time: TimeStr | None = None
+    sleep_time: TimeStr | None = None
+    goals: list[str] | None = Field(default=None, max_length=12)
+    nudge_style: str | None = Field(default=None, max_length=32)
+    tone: str | None = Field(default=None, max_length=32)
+    completed: bool | None = None
 
 
 class OnboardingResponse(ORMModel):
@@ -355,12 +370,26 @@ class TaskResponse(ORMModel):
 # ============================================================= preferences
 
 
+ReminderTone = Literal["gentle", "firm", "mix"]
+
+
 class PreferenceUpdate(BaseModel):
     quiet_start: TimeStr | None = None
     quiet_end: TimeStr | None = None
     quiet_repeat_days: list[int] | None = None
+    quiet_enabled: bool | None = None
+    quiet_allow_priority: bool | None = None
     digest_time: TimeStr | None = None
     voice_enabled: bool | None = None
+    push_enabled: bool | None = None
+    morning_summary_enabled: bool | None = None
+    weekly_report_enabled: bool | None = None
+    streak_alerts_enabled: bool | None = None
+    reminder_tone: ReminderTone | None = None
+    use_name_in_reminders: bool | None = None
+    include_streak_in_reminders: bool | None = None
+    use_emojis_in_reminders: bool | None = None
+    habit_stacking_enabled: bool | None = None
     max_nudges_per_day: int | None = Field(default=None, ge=1, le=50)
     timezone: str | None = Field(default=None, max_length=64)
 
@@ -373,13 +402,29 @@ class PreferenceUpdate(BaseModel):
             raise ValueError("quiet_repeat_days must be 0..6 (Monday=0)")
         return sorted(set(v))
 
+    @field_validator("timezone")
+    @classmethod
+    def _real_zone(cls, v: str | None) -> str | None:
+        return _check_zone(v)
+
 
 class PreferenceResponse(ORMModel):
     quiet_start: str | None
     quiet_end: str | None
     quiet_repeat_days: list[int] | None
+    quiet_enabled: bool
+    quiet_allow_priority: bool
     digest_time: str | None
     voice_enabled: bool
+    push_enabled: bool
+    morning_summary_enabled: bool
+    weekly_report_enabled: bool
+    streak_alerts_enabled: bool
+    reminder_tone: str
+    use_name_in_reminders: bool
+    include_streak_in_reminders: bool
+    use_emojis_in_reminders: bool
+    habit_stacking_enabled: bool
     max_nudges_per_day: int
     timezone: str
 

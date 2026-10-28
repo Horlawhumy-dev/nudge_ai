@@ -74,6 +74,8 @@ class NudgeCandidate:
     digest_time: str | None = None
     due_siblings: int = 0
     streak_current: int = 0
+    push_enabled: bool = True
+    streak_alerts: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +173,16 @@ def streak_at_risk(c: NudgeCandidate) -> bool:
 # Each rule returns None to pass, or a terminal verdict to stop the chain.
 
 
+def respects_push_setting(c: NudgeCandidate) -> RuleVerdict | None:
+    if c.push_enabled:
+        return None
+    return RuleVerdict(
+        action="suppress",
+        rule="respects_push_setting",
+        reason="push notifications are turned off in the user's settings",
+    )
+
+
 def respects_plan_tier(c: NudgeCandidate) -> RuleVerdict | None:
     if c.plan != "free":
         return None
@@ -258,7 +270,7 @@ def respects_habit_stack(c: NudgeCandidate) -> RuleVerdict | None:
 
 
 def protects_streak(c: NudgeCandidate) -> RuleVerdict | None:
-    if not streak_at_risk(c):
+    if not c.streak_alerts or not streak_at_risk(c):
         return None
     return RuleVerdict(
         action="allow",
@@ -269,6 +281,7 @@ def protects_streak(c: NudgeCandidate) -> RuleVerdict | None:
 
 
 _RULES: tuple[Callable[[NudgeCandidate], RuleVerdict | None], ...] = (
+    respects_push_setting,
     respects_plan_tier,
     avoids_nag,
     respects_quiet_hours,
@@ -335,6 +348,7 @@ __all__ = [
     "respects_digest_window",
     "respects_habit_stack",
     "respects_plan_tier",
+    "respects_push_setting",
     "respects_quiet_hours",
     "avoids_nag",
     "streak_at_risk",

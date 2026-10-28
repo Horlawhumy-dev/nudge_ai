@@ -43,7 +43,10 @@ def scripted(body: str = NUDGE_BODY) -> FakeClient:
 
 
 async def make_habit(client: AsyncClient, headers: dict[str, str], name: str) -> UUID:
-    r = await client.post("/api/v1/habits", json={"name": name}, headers=headers)
+    # Habits default to a reminder time of day; pin midnight so "due now" ignores the clock.
+    r = await client.post(
+        "/api/v1/habits", json={"name": name, "preferred_time": "00:00"}, headers=headers
+    )
     assert r.status_code == 201, r.text
     return UUID(r.json()["id"])
 
