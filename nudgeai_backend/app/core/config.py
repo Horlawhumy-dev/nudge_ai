@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     rate_limit_code_attempts_per_5min: int = 15
     rate_limit_forgot_per_hour: int = 6
     rate_limit_speech_per_minute: int = 20
+    rate_limit_vision_per_minute: int = 6
 
     # --- Meta endpoints (Meta models only) ---
     # Chat runs on the Meta Model API (smart/deep tiers) and Baseten, which
@@ -149,6 +150,9 @@ class Settings(BaseSettings):
     # confirmed against Meta's docs yet, so it is configurable. Empty derives
     # "<META_API_BASE_URL>/audio/transcriptions". See app/ai/speech.py.
     muse_voice_url: str = ""
+    # A photo of a to-do list, whiteboard or schedule (POST /vision/extract).
+    vision_max_bytes: int = 5_000_000
+    vision_max_items: int = 12
     # A voice note is a chat turn, not a recording session.
     speech_max_bytes: int = 10_000_000
     speech_timeout_seconds: float = 60.0
