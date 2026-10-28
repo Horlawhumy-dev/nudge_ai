@@ -22,7 +22,56 @@ class Conflict(Exception):
 # =================================================================== habits
 
 
+# Weekly check-in goal implied by a cadence when the client doesn't pick one.
+_GOAL_BY_FREQUENCY = {"daily": 7, "weekdays": 5, "weekly": 1}
+# Reminder time used when a habit has only a time of day (matches the mobile defaults).
+_DEFAULT_TIME = {"morning": "08:00", "afternoon": "14:00", "evening": "19:00"}
+
+
+class Invalid(Exception):
+    """A request that is well-formed but not allowed (maps to 422)."""
+
+
+async def _resolve_trigger(
+    session: AsyncSession, user_id: UUID, trigger_id: UUID, *, habit_id: UUID | None
+) -> Habit:
+    """The habit a new/updated habit is stacked after, validated.
+
+    It must be the caller's, still active, not the habit itself, and following the chain of
+    triggers upward must never lead back to ``habit_id`` (a loop would never fire).
+    """
+    if habit_id is not None and trigger_id == habit_id:
+        raise Invalid("a habit can't be stacked after itself")
+    trigger = await session.scalar(
+        select(Habit).where(
+            Habit.id == trigger_id, Habit.user_id == user_id, Habit.archived_at.is_(None)
+        )
+    )
+    if trigger is None:
+        raise NotFound("trigger habit not found")
+    seen: set[UUID] = set()
+    cursor: Habit | None = trigger
+    while cursor is not None and cursor.id not in seen:
+        if habit_id is not None and cursor.id == habit_id:
+            raise Invalid("that would make the stack loop back on itself")
+        seen.add(cursor.id)
+        cursor = (
+            await session.get(Habit, cursor.stacked_after_id) if cursor.stacked_after_id else None
+        )
+    return trigger
+
+
 async def create_habit(session: AsyncSession, user_id: UUID, **kwargs: Any) -> Habit:
+    trigger_id = kwargs.pop("stacked_after_id", None)
+    if kwargs.get("goal_days") is None:
+        kwargs["goal_days"] = _GOAL_BY_FREQUENCY.get(kwargs.get("frequency", "daily"), 7)
+    if kwargs.get("preferred_time") is None:
+        kwargs["preferred_time"] = _DEFAULT_TIME.get(kwargs.get("time_of_day", "morning"))
+    if trigger_id is not None:
+        trigger = await _resolve_trigger(session, user_id, trigger_id, habit_id=None)
+        kwargs["stacked_after_id"] = trigger.id
+        # The engine orders a stack by position, so sit just after the trigger.
+        kwargs["stack_position"] = trigger.stack_position + 1
     habit = Habit(user_id=user_id, **kwargs)
     session.add(habit)
     await session.flush()
@@ -56,13 +105,45 @@ async def list_habits(
     return list(await session.scalars(stmt))
 
 
+# Columns that can't be NULL: an explicit null in a PATCH is ignored rather than an error.
+_NOT_NULLABLE = {
+    "name",
+    "target_per_day",
+    "stack_position",
+    "emoji",
+    "time_of_day",
+    "frequency",
+    "goal_days",
+    "active",
+}
+
+
 async def update_habit(
     session: AsyncSession, user_id: UUID, habit_id: UUID, **kwargs: Any
 ) -> Habit:
     habit = await get_habit(session, user_id, habit_id)
-    for key, value in kwargs.items():
-        if value is not None:
-            setattr(habit, key, value)
+    changes = {k: v for k, v in kwargs.items() if v is not None or k not in _NOT_NULLABLE}
+
+    if "frequency" in changes and "goal_days" not in changes:
+        changes["goal_days"] = _GOAL_BY_FREQUENCY[changes["frequency"]]
+    if "time_of_day" in changes and "preferred_time" not in changes:
+        # Follow the new time of day unless the user had pinned an exact reminder time.
+        if habit.preferred_time in (None, *_DEFAULT_TIME.values()):
+            changes["preferred_time"] = _DEFAULT_TIME[changes["time_of_day"]]
+
+    if "stacked_after_id" in changes:
+        trigger_id = changes.pop("stacked_after_id")
+        if trigger_id is None:
+            if habit.stacked_after_id is not None:
+                habit.stack_position = 0
+            habit.stacked_after_id = None
+        else:
+            trigger = await _resolve_trigger(session, user_id, trigger_id, habit_id=habit.id)
+            habit.stacked_after_id = trigger.id
+            habit.stack_position = trigger.stack_position + 1
+
+    for key, value in changes.items():
+        setattr(habit, key, value)
     await session.commit()
     return await get_habit(session, user_id, habit_id)
 
@@ -71,7 +152,29 @@ async def delete_habit(session: AsyncSession, user_id: UUID, habit_id: UUID) -> 
     habit = await get_habit(session, user_id, habit_id)
     habit.archived_at = datetime.now(UTC)
     habit.active = False
+    # Anything stacked after it loses its trigger and becomes a standalone habit.
+    dependants = await session.scalars(
+        select(Habit).where(Habit.user_id == user_id, Habit.stacked_after_id == habit.id)
+    )
+    for dep in dependants:
+        dep.stacked_after_id = None
+        dep.stack_position = 0
     await session.commit()
+
+
+async def restore_habit(session: AsyncSession, user_id: UUID, habit_id: UUID) -> Habit:
+    """Undo a delete. Stacking links are not restored; the user can re-stack it."""
+    habit = await session.scalar(
+        select(Habit)
+        .options(selectinload(Habit.streak))
+        .where(Habit.id == habit_id, Habit.user_id == user_id)
+    )
+    if habit is None:
+        raise NotFound("habit not found")
+    habit.archived_at = None
+    habit.active = True
+    await session.commit()
+    return await get_habit(session, user_id, habit_id)
 
 
 def recompute_streak(completion_days: list[date], *, today: date) -> tuple[int, int, date | None]:

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import User
+from app.db.models import Habit, User
 from app.services.core_service import recompute_streak
 
 H = "/api/v1/habits"
@@ -23,7 +24,7 @@ async def _authed(client: AsyncClient, session: AsyncSession, email: str) -> dic
 
     user = User(
         email=email,
-        password_hash=hash_password("garden42"),
+        password_hash=hash_password("Garden42!"),
         timezone="UTC",
         is_email_verified=True,
     )
@@ -217,3 +218,128 @@ async def test_tasks_are_scoped_per_user(client: AsyncClient, session: AsyncSess
     assert (await client.get(f"{T}/{tid}", headers=b)).status_code == 404
     assert (await client.delete(f"{T}/{tid}", headers=b)).status_code == 404
     assert len((await client.get(T, headers=a)).json()) == 1
+
+
+# ============================================================ habit fields and stacking
+
+
+async def _habit(client: AsyncClient, headers: dict[str, str], **body: object) -> dict:  # type: ignore[type-arg]
+    r = await client.post(H, json={"name": "Stretch", **body}, headers=headers)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+async def test_habit_defaults_follow_frequency_and_time_of_day(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "fields@example.com")
+    plain = await _habit(client, h)
+    assert plain["emoji"] == "🎯" and plain["time_of_day"] == "morning"
+    assert plain["frequency"] == "daily" and plain["goal_days"] == 7
+    assert plain["preferred_time"] == "08:00"
+
+    gym = await _habit(
+        client,
+        h,
+        name="Gym",
+        emoji="💪",
+        category="Fitness",
+        frequency="weekdays",
+        time_of_day="evening",
+    )
+    assert gym["goal_days"] == 5 and gym["preferred_time"] == "19:00"
+    assert (gym["emoji"], gym["category"]) == ("💪", "Fitness")
+
+    pinned = await _habit(client, h, name="Call mum", goal_days=2, preferred_time="17:30")
+    assert pinned["goal_days"] == 2 and pinned["preferred_time"] == "17:30"
+
+
+async def test_habit_validation_rejects_bad_cadence_and_blank_names(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "valid@example.com")
+    for bad in (
+        {"frequency": "hourly"},
+        {"time_of_day": "night"},
+        {"goal_days": 8},
+        {"name": "  "},
+    ):
+        r = await client.post(H, json={"name": "X", **bad}, headers=h)
+        assert r.status_code == 422, bad
+
+
+async def test_updating_cadence_rederives_goal_and_reminder(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "update@example.com")
+    habit = await _habit(client, h)
+    r = await client.patch(
+        f"{H}/{habit['id']}", json={"frequency": "weekly", "time_of_day": "afternoon"}, headers=h
+    )
+    body = r.json()
+    assert body["goal_days"] == 1 and body["preferred_time"] == "14:00"
+    # an explicitly pinned reminder time survives a change of time of day
+    await client.patch(f"{H}/{habit['id']}", json={"preferred_time": "09:15"}, headers=h)
+    r2 = await client.patch(f"{H}/{habit['id']}", json={"time_of_day": "evening"}, headers=h)
+    assert r2.json()["preferred_time"] == "09:15"
+
+
+async def test_stacking_orders_after_the_trigger_and_can_be_cleared(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "stack@example.com")
+    coffee = await _habit(client, h, name="Coffee")
+    journal = await _habit(client, h, name="Journal", stacked_after_id=coffee["id"])
+    assert journal["stacked_after_id"] == coffee["id"]
+    stored = await session.get(Habit, UUID(journal["id"]))
+    assert stored is not None and stored.stack_position == 1
+
+    cleared = await client.patch(f"{H}/{journal['id']}", json={"stacked_after_id": None}, headers=h)
+    assert cleared.json()["stacked_after_id"] is None
+    await session.refresh(stored)
+    assert stored.stack_position == 0
+
+
+async def test_stacking_rejects_self_loops_and_foreign_triggers(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    a = await _authed(client, session, "loop-a@example.com")
+    b = await _authed(client, session, "loop-b@example.com")
+    first = await _habit(client, a, name="First")
+    second = await _habit(client, a, name="Second", stacked_after_id=first["id"])
+    third = await _habit(client, a, name="Third", stacked_after_id=second["id"])
+
+    self_stack = await client.patch(
+        f"{H}/{first['id']}", json={"stacked_after_id": first["id"]}, headers=a
+    )
+    assert self_stack.status_code == 422
+    loop = await client.patch(
+        f"{H}/{first['id']}", json={"stacked_after_id": third["id"]}, headers=a
+    )
+    assert loop.status_code == 422 and "loop" in loop.json()["detail"]
+
+    theirs = await _habit(client, b, name="Theirs")
+    stolen = await client.post(
+        H, json={"name": "Mine", "stacked_after_id": theirs["id"]}, headers=a
+    )
+    assert stolen.status_code == 404  # another user's habit doesn't exist for you
+
+
+async def test_deleting_a_trigger_unstacks_dependants_and_restore_brings_it_back(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    h = await _authed(client, session, "restore@example.com")
+    trigger = await _habit(client, h, name="Trigger")
+    child = await _habit(client, h, name="Child", stacked_after_id=trigger["id"])
+
+    assert (await client.delete(f"{H}/{trigger['id']}", headers=h)).status_code == 204
+    after = (await client.get(f"{H}/{child['id']}", headers=h)).json()
+    assert after["stacked_after_id"] is None
+    assert trigger["id"] not in [x["id"] for x in (await client.get(H, headers=h)).json()]
+
+    restored = await client.post(f"{H}/{trigger['id']}/restore", headers=h)
+    assert restored.status_code == 200 and restored.json()["active"] is True
+    assert trigger["id"] in [x["id"] for x in (await client.get(H, headers=h)).json()]
+    # a stranger can't restore it
+    other = await _authed(client, session, "restore2@example.com")
+    assert (await client.post(f"{H}/{trigger['id']}/restore", headers=other)).status_code == 404

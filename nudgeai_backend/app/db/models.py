@@ -173,12 +173,34 @@ class Habit(Base):
     target_per_day: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     stack_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     preferred_time: Mapped[str | None] = mapped_column(String(5))
+    # Presentation and cadence the mobile app edits directly.
+    emoji: Mapped[str] = mapped_column(
+        String(16), default="🎯", server_default="🎯", nullable=False
+    )
+    category: Mapped[str | None] = mapped_column(String(40))
+    time_of_day: Mapped[str] = mapped_column(
+        String(12), default="morning", server_default="morning", nullable=False
+    )
+    frequency: Mapped[str] = mapped_column(
+        String(12), default="daily", server_default="daily", nullable=False
+    )
+    # Check-ins wanted per rolling 7 days (the "3/7 days" on a card).
+    goal_days: Mapped[int] = mapped_column(Integer, default=7, server_default="7", nullable=False)
+    # The habit whose completion triggers this one (habit stacking).
+    stacked_after_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("habits.id", ondelete="SET NULL")
+    )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         CheckConstraint("target_per_day > 0", name="ck_habits_target_positive"),
+        CheckConstraint(
+            "time_of_day IN ('morning','afternoon','evening')", name="ck_habits_time_of_day"
+        ),
+        CheckConstraint("frequency IN ('daily','weekdays','weekly')", name="ck_habits_frequency"),
+        CheckConstraint("goal_days BETWEEN 1 AND 7", name="ck_habits_goal_days"),
         Index("ix_habits_user_active", "user_id", "active"),
     )
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -9,6 +9,12 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.core.security import password_problems
 
 TimeStr = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+TimeOfDay = Literal["morning", "afternoon", "evening"]
+Frequency = Literal["daily", "weekdays", "weekly"]
+
+# Check-ins per rolling week implied by a cadence, unless the client sets its own goal.
+GOAL_DAYS_BY_FREQUENCY: dict[str, int] = {"daily": 7, "weekdays": 5, "weekly": 1}
 
 
 def _check_password(value: str) -> str:
@@ -128,6 +134,22 @@ class HabitCreate(BaseModel):
     target_per_day: int = Field(default=1, ge=1, le=50)
     stack_position: int = Field(default=0, ge=0, le=50)
     preferred_time: TimeStr | None = None
+    emoji: str = Field(default="🎯", min_length=1, max_length=16)
+    category: str | None = Field(default=None, max_length=40)
+    time_of_day: TimeOfDay = "morning"
+    frequency: Frequency = "daily"
+    goal_days: int | None = Field(default=None, ge=1, le=7)
+    stacked_after_id: UUID | None = None
+
+    @field_validator("name", "category")
+    @classmethod
+    def _tidy(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("must not be blank")
+        return v
 
 
 class HabitUpdate(BaseModel):
@@ -136,7 +158,23 @@ class HabitUpdate(BaseModel):
     target_per_day: int | None = Field(default=None, ge=1, le=50)
     stack_position: int | None = Field(default=None, ge=0, le=50)
     preferred_time: TimeStr | None = None
+    emoji: str | None = Field(default=None, min_length=1, max_length=16)
+    category: str | None = Field(default=None, max_length=40)
+    time_of_day: TimeOfDay | None = None
+    frequency: Frequency | None = None
+    goal_days: int | None = Field(default=None, ge=1, le=7)
+    stacked_after_id: UUID | None = None
     active: bool | None = None
+
+    @field_validator("name", "category")
+    @classmethod
+    def _tidy(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("must not be blank")
+        return v
 
 
 class StreakResponse(ORMModel):
@@ -152,6 +190,12 @@ class HabitResponse(ORMModel):
     target_per_day: int
     stack_position: int
     preferred_time: str | None
+    emoji: str
+    category: str | None
+    time_of_day: str
+    frequency: str
+    goal_days: int
+    stacked_after_id: UUID | None
     active: bool
     streak: StreakResponse | None = None
 

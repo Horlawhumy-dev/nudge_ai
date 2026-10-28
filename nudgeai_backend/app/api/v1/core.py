@@ -21,7 +21,7 @@ from app.schemas.models import (
     UserResponse,
 )
 from app.services import core_service
-from app.services.core_service import Conflict, NotFound
+from app.services.core_service import Conflict, Invalid, NotFound
 
 router = APIRouter(tags=["core"])
 
@@ -38,6 +38,8 @@ async def _http[T](fn: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Conflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Invalid as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ================================================================== profile
@@ -143,6 +145,13 @@ async def complete_habit(habit_id: UUID, user: CurrentUser, session: SessionDep)
 @router.post("/habits/{habit_id}/uncomplete", response_model=HabitResponse)
 async def uncomplete_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
     habit = await _http(core_service.uncomplete_habit, session, user.id, habit_id)
+    return HabitResponse.model_validate(habit)
+
+
+@router.post("/habits/{habit_id}/restore", response_model=HabitResponse)
+async def restore_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
+    """Undo a delete (the mobile "Undo" toast)."""
+    habit = await _http(core_service.restore_habit, session, user.id, habit_id)
     return HabitResponse.model_validate(habit)
 
 
