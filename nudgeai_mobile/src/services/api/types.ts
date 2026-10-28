@@ -62,3 +62,22 @@ export type ApiTask = {
   done: boolean;
   status: 'upcoming' | 'overdue' | 'completed';
 };
+
+export type ApiPreferences = {
+  quiet_start: string | null;
+  quiet_end: string | null;
+  quiet_repeat_days: number[] | null;
+  quiet_enabled: boolean;
+  quiet_allow_priority: boolean;
+  voice_enabled: boolean;
+  push_enabled: boolean;
+  morning_summary_enabled: boolean;
+  weekly_report_enabled: boolean;
+  streak_alerts_enabled: boolean;
+  reminder_tone: string;
+  use_name_in_reminders: boolean;
+  include_streak_in_reminders: boolean;
+  use_emojis_in_reminders: boolean;
+  habit_stacking_enabled: boolean;
+  timezone: string;
+};

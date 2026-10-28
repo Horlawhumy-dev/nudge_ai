@@ -107,20 +107,18 @@ describe('habits against a backend', () => {
   });
 
   it('sends rapid ticks in order and rolls a failed one back', async () => {
-    useHabitsStore
-      .getState()
-      .replaceAll([
-        {
-          id: 'h1',
-          name: 'Read',
-          emoji: '📚',
-          category: 'x',
-          timeOfDay: 'Evening',
-          frequency: 'Daily',
-          goalDays: 7,
-          completions: [],
-        },
-      ]);
+    useHabitsStore.getState().replaceAll([
+      {
+        id: 'h1',
+        name: 'Read',
+        emoji: '📚',
+        category: 'x',
+        timeOfDay: 'Evening',
+        frequency: 'Daily',
+        goalDays: 7,
+        completions: [],
+      },
+    ]);
     const order: boolean[] = [];
     habits.check.mockImplementation(async (_id, _on, done) => {
       order.push(done);
@@ -137,20 +135,18 @@ describe('habits against a backend', () => {
   });
 
   it('puts a habit back if the delete fails, and undo restores it on the server', async () => {
-    useHabitsStore
-      .getState()
-      .replaceAll([
-        {
-          id: 'h1',
-          name: 'Read',
-          emoji: '📚',
-          category: 'x',
-          timeOfDay: 'Evening',
-          frequency: 'Daily',
-          goalDays: 7,
-          completions: [],
-        },
-      ]);
+    useHabitsStore.getState().replaceAll([
+      {
+        id: 'h1',
+        name: 'Read',
+        emoji: '📚',
+        category: 'x',
+        timeOfDay: 'Evening',
+        frequency: 'Daily',
+        goalDays: 7,
+        completions: [],
+      },
+    ]);
     habits.remove.mockRejectedValue(new ApiError('nope', 500));
     useHabitsStore.getState().removeHabit('h1');
     await flush();
@@ -228,19 +224,17 @@ describe('tasks against a backend', () => {
   });
 
   it('reverts a completion the server rejected', async () => {
-    useTasksStore
-      .getState()
-      .replaceAll([
-        {
-          id: 't1',
-          title: 'x',
-          date: '2026-01-05',
-          startTime: null,
-          endTime: null,
-          priority: 'Low',
-          done: false,
-        },
-      ]);
+    useTasksStore.getState().replaceAll([
+      {
+        id: 't1',
+        title: 'x',
+        date: '2026-01-05',
+        startTime: null,
+        endTime: null,
+        priority: 'Low',
+        done: false,
+      },
+    ]);
     tasks.setDone.mockRejectedValue(new ApiError('offline', 0));
     useTasksStore.getState().toggleTask('t1');
     expect(useTasksStore.getState().tasks[0].done).toBe(true);
@@ -250,19 +244,17 @@ describe('tasks against a backend', () => {
   });
 
   it('restores the old task if an edit fails', async () => {
-    useTasksStore
-      .getState()
-      .replaceAll([
-        {
-          id: 't1',
-          title: 'Old',
-          date: '2026-01-05',
-          startTime: null,
-          endTime: null,
-          priority: 'Low',
-          done: false,
-        },
-      ]);
+    useTasksStore.getState().replaceAll([
+      {
+        id: 't1',
+        title: 'Old',
+        date: '2026-01-05',
+        startTime: null,
+        endTime: null,
+        priority: 'Low',
+        done: false,
+      },
+    ]);
     tasks.update.mockRejectedValue(new ApiError('bad', 422));
     useTasksStore.getState().updateTask('t1', { ...taskDraft, title: 'New' });
     expect(useTasksStore.getState().tasks[0].title).toBe('New');
