@@ -48,9 +48,14 @@ export default function Verify() {
         router.replace('/new-password');
         return;
       }
-      await verifyEmail(value);
+      const outcome = await verifyEmail(value);
       haptics.success();
-      router.replace('/verified');
+      if (outcome === 'already-verified') {
+        toast.show('Your email is already verified. Log in to continue.');
+        router.replace({ pathname: '/login', params: { email } });
+      } else {
+        router.replace('/verified');
+      }
     } catch (e) {
       haptics.warning();
       setError(e instanceof AuthError ? e.message : 'Something went wrong. Please try again.');

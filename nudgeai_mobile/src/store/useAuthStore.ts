@@ -98,7 +98,8 @@ type AuthState = {
   markIntroSeen: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
-  verifyEmail: (code: string) => Promise<void>;
+  /** Confirm the emailed code. `already-verified` means there was nothing left to confirm: sign in. */
+  verifyEmail: (code: string) => Promise<'verified' | 'already-verified'>;
   resendCode: () => Promise<void>;
   /** Pick the session back up after a restart. Signs out if the tokens are gone or rejected. */
   restoreSession: () => Promise<void>;
@@ -230,16 +231,23 @@ export const useAuthStore = create<AuthState>()(
           try {
             await authApi.verifyEmail({ email, code });
           } catch (e) {
+            if (e instanceof ApiError && e.status === 409) {
+              // Verified earlier (e.g. on another run), but this phone never got a session, so
+              // the code can't produce tokens. Leave the verify screen and ask them to sign in.
+              set({ status: 'signedOut', pendingEmail: null });
+              return 'already-verified';
+            }
             throw authError(e, 'code');
           }
           await loadAccount(set);
-          return;
+          return 'verified';
         }
         await sleep(MOCK_LATENCY_MS);
         if (code !== DEMO_CODE) {
           throw new AuthError('That code isn’t right. Check it and try again.', 'code');
         }
         set({ status: 'onboarding' });
+        return 'verified';
       },
 
       resendCode: async () => {

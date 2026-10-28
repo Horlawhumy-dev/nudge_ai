@@ -114,6 +114,14 @@ describe('auth store with a backend', () => {
     expect(useAuthStore.getState().status).toBe('onboarding');
   });
 
+  it('sends an already-verified account to sign in instead of leaving them on the verify screen', async () => {
+    useAuthStore.setState({ status: 'unverified', pendingEmail: 'ada@example.com' });
+    auth.verifyEmail.mockRejectedValue(new ApiError('email already verified', 409));
+    const outcome = await useAuthStore.getState().verifyEmail('1234');
+    expect(outcome).toBe('already-verified');
+    expect(useAuthStore.getState()).toMatchObject({ status: 'signedOut', pendingEmail: null });
+  });
+
   it('blames the code field for a wrong code', async () => {
     useAuthStore.setState({ pendingEmail: 'ada@example.com' });
     auth.verifyEmail.mockRejectedValue(new ApiError('invalid or expired code', 400));

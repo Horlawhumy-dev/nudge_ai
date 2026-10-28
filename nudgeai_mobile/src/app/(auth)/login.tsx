@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
@@ -25,7 +25,8 @@ import { toast } from '@/store/useToastStore';
 export default function Login() {
   const router = useRouter();
   const signIn = useAuthStore((s) => s.signIn);
-  const email = useField('', validateEmail);
+  const { email: prefilled } = useLocalSearchParams<{ email?: string }>();
+  const email = useField(prefilled ?? '', validateEmail);
   const password = useField('', validatePasswordPresent);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
