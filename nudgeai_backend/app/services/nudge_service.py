@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -15,8 +15,11 @@ from app.db.models import (
     Nudge,
     NudgeFeedback,
     Streak,
+    Task,
+    User,
 )
 from app.schemas.models import AnalyticsOverview, HabitSummary
+from app.services import insights
 from app.services.core_service import Conflict, NotFound, complete_habit
 
 NUDGE_STATUSES = ("scheduled", "sent", "snoozed", "skipped", "failed")
@@ -172,3 +175,55 @@ __all__ = [
     "record_feedback",
     "snooze_nudge",
 ]
+
+
+# ------------------------------------------------------------ progress and reports
+
+
+async def load_facts(
+    session: AsyncSession, user: User, *, today: date, lookback_days: int = 120
+) -> tuple[list[insights.HabitFacts], list[insights.TaskFacts]]:
+    """Active habits with their check-in dates, and the user's live tasks, as plain facts."""
+    start = today - timedelta(days=lookback_days)
+    habits = list(
+        await session.scalars(
+            select(Habit)
+            .where(Habit.user_id == user.id, Habit.archived_at.is_(None))
+            .order_by(Habit.stack_position, Habit.created_at)
+        )
+    )
+    by_habit: dict[UUID, set[date]] = {}
+    for hid, day in (
+        await session.execute(
+            select(HabitCompletion.habit_id, HabitCompletion.completed_on).where(
+                HabitCompletion.user_id == user.id, HabitCompletion.completed_on >= start
+            )
+        )
+    ).all():
+        by_habit.setdefault(hid, set()).add(day)
+    habit_facts = [
+        insights.HabitFacts(
+            str(h.id), h.name, h.emoji, h.goal_days, frozenset(by_habit.get(h.id, ()))
+        )
+        for h in habits
+    ]
+    tasks = await session.scalars(
+        select(Task).where(Task.user_id == user.id, Task.deleted_at.is_(None))
+    )
+    task_facts = [
+        insights.TaskFacts(str(t.id), t.title, t.date, t.start_time, t.due_at, t.done_at)
+        for t in tasks
+    ]
+    return habit_facts, task_facts
+
+
+async def all_time_checkins(session: AsyncSession, user_id: UUID) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(HabitCompletion)
+            .join(Habit, Habit.id == HabitCompletion.habit_id)
+            .where(HabitCompletion.user_id == user_id, Habit.archived_at.is_(None))
+        )
+        or 0
+    )

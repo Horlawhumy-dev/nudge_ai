@@ -565,6 +565,81 @@ class DeviceResponse(ORMModel):
     created_at: datetime
 
 
+# ====================================================== progress and reports
+
+
+class BarOut(BaseModel):
+    label: str
+    value: int
+
+
+class TopHabitOut(BaseModel):
+    habit_id: UUID
+    name: str
+    emoji: str
+    streak: int
+    completion: int
+
+
+class DayCell(BaseModel):
+    date: Day
+    status: Literal["completed", "some", "missed", "today", "future"]
+
+
+class HabitProgress(BaseModel):
+    period: Literal["weekly", "monthly"]
+    bars: list[BarOut]
+    streak: int
+    best_streak: int
+    consistency: int
+    all_time_wins: int
+    top_habits: list[TopHabitOut]
+    consistency_map: list[DayCell]
+    insight: str | None = None
+
+
+class TimeGroupOut(BaseModel):
+    name: Literal["Morning", "Afternoon", "Evening"]
+    completion: int
+    total: int
+
+
+class OverdueTaskOut(BaseModel):
+    task_id: UUID
+    title: str
+    due_at: datetime
+    days_overdue: int
+
+
+class TaskProgress(BaseModel):
+    period: Literal["weekly", "monthly"]
+    bars: list[BarOut]
+    done: int
+    total: int
+    completion_rate: int
+    on_time_rate: int
+    overdue: int
+    time_groups: list[TimeGroupOut]
+    most_overdue: list[OverdueTaskOut]
+    insight: str | None = None
+
+
+class WeeklyReportResponse(BaseModel):
+    start: Day
+    end: Day
+    habit_rate: int
+    check_ins: int
+    possible: int
+    tasks_done: int
+    tasks_total: int
+    best_day: str | None
+    best_day_count: int
+    top_habit: str | None
+    needs_love: str | None
+    headline: str
+    tips: list[str]
+
+
 # ================================================================ analytics
 
 
