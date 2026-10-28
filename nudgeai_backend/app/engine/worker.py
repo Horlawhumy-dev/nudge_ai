@@ -480,6 +480,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--interval", type=int, default=WORKER_INTERVAL_SECONDS)
     parser.add_argument("--batch", type=int, default=WORKER_CLAIM_BATCH)
     args = parser.parse_args(argv)
+    # The API configures logging in app.main; the worker is its own process and must do it too,
+    # or every "worker pass" line below is silently dropped.
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     if args.once:
         report = asyncio.run(run_once(batch=args.batch))
         maintenance = asyncio.run(run_maintenance())
