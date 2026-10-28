@@ -8,6 +8,8 @@ type ChatInputProps = {
   onChangeText: (text: string) => void;
   onSend: () => void;
   onVoice: () => void;
+  /** Shows an attach-photo button when given (server accounts only). */
+  onPhoto?: () => void;
   disabled?: boolean;
 };
 
@@ -17,6 +19,7 @@ export function ChatInput({
   onChangeText,
   onSend,
   onVoice,
+  onPhoto,
   disabled = false,
 }: ChatInputProps) {
   const hasText = value.trim().length > 0;
@@ -33,6 +36,18 @@ export function ChatInput({
         onSubmitEditing={() => hasText && !disabled && onSend()}
         accessibilityLabel="Message Nudge"
       />
+      {onPhoto && !hasText ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add tasks from a photo"
+          disabled={disabled}
+          hitSlop={10}
+          onPress={onPhoto}
+          style={disabled && { opacity: 0.5 }}
+        >
+          <Icon name="image-outline" size={24} />
+        </Pressable>
+      ) : null}
       {hasText ? (
         <Pressable
           accessibilityRole="button"

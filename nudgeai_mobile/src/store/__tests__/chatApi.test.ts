@@ -1,6 +1,7 @@
 import type { SseEvent } from '@/services/api/sse';
 import { ApiError } from '@/services/api/errors';
 import { conversationsApi, proposalsApi, streamChat } from '@/services/api/endpoints/chat';
+import { visionApi } from '@/services/api/endpoints/vision';
 import { syncPlanner } from '@/services/sync';
 
 import { useChatStore } from '../useChatStore';
@@ -14,6 +15,7 @@ jest.mock('@/constants/env', () => ({
   DEMO_CODE: '1234',
 }));
 jest.mock('@/services/api/endpoints/chat');
+jest.mock('@/services/api/endpoints/vision');
 jest.mock('@/services/sync', () => ({
   syncPlanner: jest.fn(async () => undefined),
   syncData: jest.fn(async () => undefined),
@@ -192,5 +194,44 @@ describe('chat against a backend', () => {
     useChatStore.getState().deleteConversation(active().id);
     expect(conversations.remove).toHaveBeenCalledWith('srv-9');
     expect(useChatStore.getState().conversations).toEqual([]);
+  });
+
+  it('turns a photo into proposals the user can confirm', async () => {
+    jest.mocked(visionApi.extract).mockResolvedValue({
+      message: 'I found two tasks.',
+      proposals: [
+        {
+          id: 'p1',
+          tool: 'task_create',
+          args: {},
+          summary: 'Add task: Buy milk',
+          status: 'pending',
+        },
+        {
+          id: 'p2',
+          tool: 'task_create',
+          args: {},
+          summary: 'Add task: Call dentist',
+          status: 'pending',
+        },
+      ],
+    });
+    await useChatStore.getState().sendPhoto('file:///list.jpg');
+    const convo = active();
+    expect(convo.messages.map((m) => m.text)).toEqual(['📷 Photo', 'I found two tasks.']);
+    expect(convo.messages[1].proposals?.map((p) => p.summary)).toEqual([
+      'Add task: Buy milk',
+      'Add task: Call dentist',
+    ]);
+    expect(useChatStore.getState().isReplying).toBe(false);
+  });
+
+  it('explains an unreadable or oversized photo instead of failing silently', async () => {
+    jest.mocked(visionApi.extract).mockRejectedValue(new ApiError('too big', 413));
+    await useChatStore.getState().sendPhoto('file:///huge.jpg');
+    expect(active().messages[1].text).toMatch(/too large/);
+    jest.mocked(visionApi.extract).mockRejectedValue(new ApiError('boom', 502));
+    await useChatStore.getState().sendPhoto('file:///blurry.jpg');
+    expect(active().messages[3].text).toMatch(/clearer/);
   });
 });

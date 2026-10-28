@@ -7,6 +7,7 @@ import { replyTo } from '@/features/chat/replies';
 import type { ChatMessage, ChatVia, Conversation, Proposal } from '@/features/chat/types';
 import { createId, sleep } from '@/lib/format';
 import { ApiError } from '@/services/api/errors';
+import { visionApi } from '@/services/api/endpoints/vision';
 import { syncPlanner } from '@/services/sync';
 import {
   conversationsApi,
@@ -31,6 +32,8 @@ type ChatState = {
     text: string,
     options?: { promptEmoji?: string; via?: ChatVia }
   ) => Promise<ChatMessage | null>;
+  /** Read tasks off a photo; the assistant answers with confirm-gated proposals. */
+  sendPhoto: (uri: string) => Promise<void>;
   /** Resend the message a failed reply was answering. */
   retry: (messageId: string) => Promise<void>;
   /** Confirm or decline a change the assistant proposed. */
@@ -186,6 +189,54 @@ export const useChatStore = create<ChatState>()(
           isReplying: false,
         }));
         return reply;
+      },
+
+      sendPhoto: async (uri) => {
+        const userMessage: ChatMessage = {
+          id: createId('msg'),
+          role: 'user',
+          text: '📷 Photo',
+          via: 'text',
+        };
+        let id = get().activeId;
+        if (!id || !get().conversations.some((c) => c.id === id)) {
+          id = createId('chat');
+          const conversation: Conversation = { id, createdAt: Date.now(), messages: [] };
+          set((s) => ({ conversations: [...s.conversations, conversation], activeId: id }));
+        }
+        const target = id;
+        const add = (m: ChatMessage) =>
+          set((s) => ({
+            conversations: s.conversations.map((c) =>
+              c.id === target ? { ...c, messages: [...c.messages, m] } : c
+            ),
+          }));
+        add(userMessage);
+        set(() => ({ isReplying: true }));
+        const reply: ChatMessage = { id: createId('msg'), role: 'assistant', text: '' };
+        try {
+          const found = await visionApi.extract(uri);
+          reply.text = found.message || 'Here’s what I found.';
+          if (found.proposals.length > 0) {
+            reply.proposals = found.proposals.map((p) => ({
+              id: p.id,
+              summary: p.summary,
+              status: 'pending' as const,
+            }));
+          }
+        } catch (e) {
+          reply.failed = false;
+          reply.text =
+            e instanceof ApiError && e.status === 413
+              ? 'That photo is too large. Try a smaller one.'
+              : e instanceof ApiError && e.status === 415
+                ? 'I can read PNG, JPEG or WebP photos.'
+                : e instanceof ApiError && e.isNetwork
+                  ? OFFLINE_REPLY
+                  : 'I couldn’t read that photo. Try again with a clearer one.';
+        }
+        add(reply);
+        set(() => ({ isReplying: false }));
       },
 
       retry: async (messageId) => {

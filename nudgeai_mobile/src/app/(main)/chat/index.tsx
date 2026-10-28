@@ -1,7 +1,10 @@
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
+import { DEMO_MODE } from '@/constants/env';
+import { toast } from '@/store/useToastStore';
 import { AiOrb, Screen, Text } from '@/components/ui';
 import { ChatHeader } from '@/features/chat/components/ChatHeader';
 import { ChatInput } from '@/features/chat/components/ChatInput';
@@ -22,6 +25,7 @@ export default function Chat() {
   const send = useChatStore((s) => s.send);
   const retry = useChatStore((s) => s.retry);
   const resolveProposal = useChatStore((s) => s.resolveProposal);
+  const sendPhoto = useChatStore((s) => s.sendPhoto);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList>(null);
   const keyboardVisible = useKeyboardVisible();
@@ -39,6 +43,18 @@ export default function Chat() {
     startNew();
     void send(prompt);
   }, [prompt, send, startNew]);
+
+  const pickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+      });
+      if (!result.canceled && result.assets[0]) await sendPhoto(result.assets[0].uri);
+    } catch {
+      toast.error('Couldn’t open your photos.');
+    }
+  };
 
   const submit = () => {
     const text = draft;
@@ -59,6 +75,7 @@ export default function Chat() {
             onChangeText={setDraft}
             onSend={submit}
             onVoice={() => router.push('/chat/voice')}
+            onPhoto={DEMO_MODE ? undefined : () => void pickPhoto()}
             disabled={isReplying}
           />
         </View>
