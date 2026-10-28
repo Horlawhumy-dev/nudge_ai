@@ -5,7 +5,10 @@ import type { ChatMessage, Conversation, ConversationMode } from './types';
 const MAX_TITLE = 70;
 
 /** First thing the user said, trimmed; falls back for empty threads. */
-export function conversationTitle(conversation: Pick<Conversation, 'messages'>): string {
+export function conversationTitle(
+  conversation: Pick<Conversation, 'messages'> & { title?: string }
+): string {
+  if (conversation.title?.trim()) return conversation.title.trim();
   const first = conversation.messages.find((m) => m.role === 'user')?.text.trim();
   if (!first) return 'New chat';
   return first.length > MAX_TITLE ? `${first.slice(0, MAX_TITLE - 1)}…` : first;

@@ -20,6 +20,8 @@ export default function Chat() {
   const startNew = useChatStore((s) => s.startNew);
   const isReplying = useChatStore((s) => s.isReplying);
   const send = useChatStore((s) => s.send);
+  const retry = useChatStore((s) => s.retry);
+  const resolveProposal = useChatStore((s) => s.resolveProposal);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList>(null);
   const keyboardVisible = useKeyboardVisible();
@@ -93,7 +95,13 @@ export default function Chat() {
           keyboardDismissMode="interactive"
           data={messages}
           keyExtractor={(m) => m.id}
-          renderItem={({ item }) => <MessageBubble message={item} />}
+          renderItem={({ item }) => (
+            <MessageBubble
+              message={item}
+              onRetry={() => void retry(item.id)}
+              onProposal={(proposalId, action) => void resolveProposal(item.id, proposalId, action)}
+            />
+          )}
           ItemSeparatorComponent={Gap}
           ListFooterComponent={isReplying ? <TypingIndicator /> : null}
           contentContainerStyle={styles.list}

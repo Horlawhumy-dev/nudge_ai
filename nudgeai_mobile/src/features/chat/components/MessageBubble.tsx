@@ -1,17 +1,49 @@
-import { StyleSheet, Text as RNText, View } from 'react-native';
+import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { colors, radius, shadows } from '@/theme';
 
 import type { ChatMessage } from '../types';
+import { ProposalCard } from './ProposalCard';
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+type Props = {
+  message: ChatMessage;
+  onProposal?: (proposalId: string, action: 'confirm' | 'reject') => void;
+  onRetry?: () => void;
+};
+
+export function MessageBubble({ message, onProposal, onRetry }: Props) {
   if (message.role === 'assistant') {
     return (
       <View style={styles.assistant} accessibilityLabel={`Nudge: ${message.text}`}>
-        <Text variant="bodyLarge" style={styles.assistantText}>
+        <Text
+          variant="bodyLarge"
+          color={message.failed ? colors.textSecondary : undefined}
+          style={styles.assistantText}
+        >
           {message.text}
         </Text>
+        {message.failed && onRetry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            onPress={onRetry}
+            hitSlop={8}
+            style={styles.retry}
+          >
+            <Text variant="subheading" color={colors.primary}>
+              Try again
+            </Text>
+          </Pressable>
+        ) : null}
+        {message.proposals?.map((p) => (
+          <ProposalCard
+            key={p.id}
+            proposal={p}
+            onConfirm={() => onProposal?.(p.id, 'confirm')}
+            onReject={() => onProposal?.(p.id, 'reject')}
+          />
+        ))}
       </View>
     );
   }
@@ -33,6 +65,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
 const styles = StyleSheet.create({
   assistant: { maxWidth: '85%' },
   assistantText: { lineHeight: 25 },
+  retry: { marginTop: 8, alignSelf: 'flex-start' },
   userRow: { alignItems: 'flex-end' },
   user: {
     maxWidth: '82%',

@@ -11,6 +11,7 @@ import {
 import { profileApi } from '@/services/api/endpoints/profile';
 import { taskFromApi, tasksApi } from '@/services/api/endpoints/tasks';
 import { reportFailure } from '@/store/remote';
+import { useChatStore } from '@/store/useChatStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useTasksStore } from '@/store/useTasksStore';
@@ -35,8 +36,8 @@ async function pullPreferences(): Promise<void> {
   }
 }
 
-/** Pull the signed-in account's habits (with check-in history), tasks and settings. */
-export async function syncData(): Promise<void> {
+/** Pull just the habits (with check-in history) and tasks, e.g. after the assistant changed them. */
+export async function syncPlanner(): Promise<void> {
   const [habits, days, tasks] = await Promise.all([
     habitsApi.list(),
     habitsApi.completions(),
@@ -44,7 +45,19 @@ export async function syncData(): Promise<void> {
   ]);
   useHabitsStore.getState().replaceAll(habits.map((h) => habitFromApi(h, days[h.id] ?? [])));
   useTasksStore.getState().replaceAll(tasks.map(taskFromApi));
-  await pullPreferences().catch(() => undefined); // settings are nice to have; data is not
+}
+
+/** Pull the signed-in account's habits, tasks, settings and chat history. */
+export async function syncData(): Promise<void> {
+  await syncPlanner();
+  // Settings and chat history are nice to have; habits and tasks are not.
+  await Promise.all([
+    pullPreferences().catch(() => undefined),
+    useChatStore
+      .getState()
+      .loadHistory()
+      .catch(() => undefined),
+  ]);
 }
 
 const SAVE_DELAY_MS = 600;

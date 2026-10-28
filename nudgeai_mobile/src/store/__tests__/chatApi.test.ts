@@ -1,0 +1,196 @@
+import type { SseEvent } from '@/services/api/sse';
+import { ApiError } from '@/services/api/errors';
+import { conversationsApi, proposalsApi, streamChat } from '@/services/api/endpoints/chat';
+import { syncPlanner } from '@/services/sync';
+
+import { useChatStore } from '../useChatStore';
+import { useToastStore } from '../useToastStore';
+
+jest.mock('@/constants/env', () => ({
+  API_URL: 'http://api.test/v1',
+  DEMO_MODE: false,
+  DEMO_EMAIL: 'demo@nudge.ai',
+  DEMO_PASSWORD: 'Password1!',
+  DEMO_CODE: '1234',
+}));
+jest.mock('@/services/api/endpoints/chat');
+jest.mock('@/services/sync', () => ({
+  syncPlanner: jest.fn(async () => undefined),
+  syncData: jest.fn(async () => undefined),
+}));
+
+const stream = jest.mocked(streamChat);
+const proposals = jest.mocked(proposalsApi);
+const conversations = jest.mocked(conversationsApi);
+
+/** Make the next turn emit these server events. */
+const serverSays = (events: SseEvent[]) =>
+  stream.mockImplementation(async (_body, onEvent) => events.forEach(onEvent));
+
+const active = () => {
+  const { conversations: all, activeId } = useChatStore.getState();
+  return all.find((c) => c.id === activeId)!;
+};
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  jest.mocked(syncPlanner).mockResolvedValue(undefined);
+  useChatStore.getState().clear();
+  useToastStore.setState({ current: null });
+});
+
+describe('chat against a backend', () => {
+  it('sends the message, keeps the server conversation id and shows the reply', async () => {
+    serverSays([
+      { event: 'conversation', data: { id: 'srv-c1', title: 'Plan my day' } },
+      { event: 'message', data: { content: 'Here is your day.' } },
+      { event: 'meta', data: { trace_id: 'tr-1' } },
+      { event: 'done', data: {} },
+    ]);
+    await useChatStore.getState().send('Plan my day', { via: 'voice' });
+
+    expect(stream).toHaveBeenCalledWith(
+      { message: 'Plan my day', conversation_id: undefined, via: 'voice' },
+      expect.any(Function)
+    );
+    const convo = active();
+    expect(convo).toMatchObject({ serverId: 'srv-c1', title: 'Plan my day' });
+    expect(convo.messages.map((m) => [m.role, m.text])).toEqual([
+      ['user', 'Plan my day'],
+      ['assistant', 'Here is your day.'],
+    ]);
+    expect(convo.messages[1].traceId).toBe('tr-1');
+    expect(useChatStore.getState().isReplying).toBe(false);
+  });
+
+  it('continues the same server conversation on the next message', async () => {
+    serverSays([
+      { event: 'conversation', data: { id: 'srv-c1', title: 't' } },
+      { event: 'message', data: { content: 'one' } },
+    ]);
+    await useChatStore.getState().send('first');
+    await useChatStore.getState().send('second');
+    expect(stream).toHaveBeenLastCalledWith(
+      expect.objectContaining({ conversation_id: 'srv-c1' }),
+      expect.any(Function)
+    );
+  });
+
+  it('attaches proposals to the reply and confirms one, then refreshes habits and tasks', async () => {
+    serverSays([
+      { event: 'message', data: { content: 'I can move it.' } },
+      {
+        event: 'proposal',
+        data: { id: 'p1', tool: 'task_update', summary: 'Change “Deep work”: start time 11:00' },
+      },
+    ]);
+    await useChatStore.getState().send('push deep work to 11');
+    const reply = active().messages[1];
+    expect(reply.proposals).toEqual([
+      { id: 'p1', summary: 'Change “Deep work”: start time 11:00', status: 'pending' },
+    ]);
+
+    proposals.confirm.mockResolvedValue(undefined);
+    await useChatStore.getState().resolveProposal(reply.id, 'p1', 'confirm');
+    expect(proposals.confirm).toHaveBeenCalledWith('p1');
+    expect(active().messages[1].proposals?.[0].status).toBe('confirmed');
+    expect(syncPlanner).toHaveBeenCalled();
+  });
+
+  it('declining a proposal does not touch the user’s data', async () => {
+    serverSays([
+      { event: 'message', data: { content: 'ok' } },
+      {
+        event: 'proposal',
+        data: { id: 'p2', tool: 'task_create', summary: 'Add task: Water plants' },
+      },
+    ]);
+    await useChatStore.getState().send('add a task');
+    proposals.reject.mockResolvedValue(undefined);
+    await useChatStore.getState().resolveProposal(active().messages[1].id, 'p2', 'reject');
+    expect(active().messages[1].proposals?.[0].status).toBe('rejected');
+    expect(syncPlanner).not.toHaveBeenCalled();
+  });
+
+  it('shows why a confirmed change failed (plan limit) on the card', async () => {
+    serverSays([
+      { event: 'message', data: { content: 'ok' } },
+      {
+        event: 'proposal',
+        data: { id: 'p3', tool: 'habit_create', summary: 'Add habit: Meditate' },
+      },
+    ]);
+    await useChatStore.getState().send('new habit');
+    proposals.confirm.mockRejectedValue(
+      new ApiError('Free includes 3 habits. Upgrade to add more.', 400)
+    );
+    await useChatStore.getState().resolveProposal(active().messages[1].id, 'p3', 'confirm');
+    expect(active().messages[1].proposals?.[0]).toMatchObject({
+      status: 'failed',
+      error: 'Free includes 3 habits. Upgrade to add more.',
+    });
+  });
+
+  it('lets the user try again when offline, without duplicating their message', async () => {
+    stream.mockRejectedValueOnce(new ApiError('offline', 0));
+    await useChatStore.getState().send('hello');
+    const failed = active().messages[1];
+    expect(failed).toMatchObject({ failed: true });
+    expect(failed.text).toMatch(/connection/);
+
+    serverSays([{ event: 'message', data: { content: 'Hi!' } }]);
+    await useChatStore.getState().retry(failed.id);
+    expect(active().messages.map((m) => m.text)).toEqual(['hello', 'Hi!']);
+  });
+
+  it('tells the user when the daily AI allowance is used up', async () => {
+    serverSays([
+      { event: 'message', data: { content: 'short answer' } },
+      { event: 'budget', data: { degraded: true } },
+    ]);
+    await useChatStore.getState().send('hi');
+    expect(useToastStore.getState().current?.message).toMatch(/allowance/);
+  });
+
+  it('loads the server history and keeps the conversation on screen', async () => {
+    conversations.list.mockResolvedValue([
+      { id: 'c1', title: 'Morning plan', created_at: '2026-01-05T08:00:00Z' },
+    ]);
+    conversations.get.mockResolvedValue({
+      id: 'c1',
+      title: 'Morning plan',
+      messages: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'plan',
+          via: 'text',
+          created_at: '2026-01-05T08:00:00Z',
+        },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content: 'sure',
+          via: 'text',
+          created_at: '2026-01-05T08:00:01Z',
+        },
+      ],
+    });
+    await useChatStore.getState().loadHistory();
+    const [convo] = useChatStore.getState().conversations;
+    expect(convo).toMatchObject({ id: 'c1', serverId: 'c1', title: 'Morning plan' });
+    expect(convo.messages).toHaveLength(2);
+  });
+
+  it('deleting a chat removes it on the server too', async () => {
+    serverSays([
+      { event: 'conversation', data: { id: 'srv-9', title: 't' } },
+      { event: 'message', data: { content: 'x' } },
+    ]);
+    await useChatStore.getState().send('hi');
+    conversations.remove.mockResolvedValue(undefined);
+    useChatStore.getState().deleteConversation(active().id);
+    expect(conversations.remove).toHaveBeenCalledWith('srv-9');
+    expect(useChatStore.getState().conversations).toEqual([]);
+  });
+});

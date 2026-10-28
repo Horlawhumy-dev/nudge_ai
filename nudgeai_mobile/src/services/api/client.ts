@@ -78,6 +78,11 @@ function refreshOnce(baseURL: string): Promise<string | null> {
   return inflight;
 }
 
+/** Get a fresh access token for callers that cannot use the axios client (streaming). */
+export function refreshSession(): Promise<string | null> {
+  return refreshOnce(API_URL);
+}
+
 /** The app-wide client. */
 export const api = createClient();
 
