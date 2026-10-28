@@ -60,7 +60,7 @@ export default function Tasks() {
             onPress={() => setSheet(true)}
             bottom={clearance - 8}
           />
-          <AskNudgeButton bottom={clearance - 8} />
+          <AskNudgeButton bottom={clearance - 8} aboveFab />
         </>
       }
     >

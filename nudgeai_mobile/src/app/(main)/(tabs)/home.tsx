@@ -6,7 +6,7 @@ import { Button, EmptyState, Screen, Text } from '@/components/ui';
 import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { allDoneToday, completedCount } from '@/features/habits/utils';
-import { AskNudgeBar, ASK_BAR_HEIGHT } from '@/features/home/components/AskNudgeBar';
+import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ListSection } from '@/features/home/components/ListSection';
 import { NudgeBanner } from '@/features/home/components/NudgeBanner';
@@ -49,9 +49,9 @@ export default function Home() {
     <Screen
       scroll
       background={colors.background}
-      bottomInset={clearance + ASK_BAR_HEIGHT + 8}
+      bottomInset={clearance + 40}
       contentStyle={styles.content}
-      overlay={<AskNudgeBar bottom={clearance - 8} />}
+      overlay={<AskNudgeButton bottom={clearance - 8} />}
     >
       <HomeHeader greeting={greeting(name, now)} streak={streak} unread={unread} />
 

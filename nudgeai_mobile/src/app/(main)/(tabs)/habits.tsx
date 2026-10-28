@@ -37,7 +37,7 @@ export default function Habits() {
             onPress={() => setSheet(true)}
             bottom={clearance - 8}
           />
-          <AskNudgeButton bottom={clearance - 8} />
+          <AskNudgeButton bottom={clearance - 8} aboveFab />
         </>
       }
     >

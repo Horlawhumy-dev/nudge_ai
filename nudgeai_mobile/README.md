@@ -106,8 +106,7 @@ Notes on deviations from the design set:
 
 ## Where the AI lives
 
-Nudge AI is reachable from every tab: Home has a docked "Ask Nudge anything" bar with a mic button (voice mode),
-the other tabs have a round Nudge button, the Home banner and Progress insight cards open it (insights pre-send a
+Nudge AI is reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
 question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
 
 ## Native-only behaviour to check on a device
