@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import jwt
-import resend
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,6 +20,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.models import RefreshToken, User, VerificationCode
+from app.infra import mailer
 
 log = logging.getLogger(__name__)
 
@@ -28,31 +28,15 @@ EMAIL_VERIFICATION = "email_verification"
 PASSWORD_RESET = "password_reset"  # noqa: S105
 
 
-_resend: resend.Emails | None = None
+async def _deliver_code(email: str, code: str, purpose: str, ttl_minutes: int) -> None:
+    """Email a one-time code. Without a mail key (local dev) it is logged instead.
 
-
-def _get_resend() -> resend.Emails:
-    global _resend
-    if _resend is None:
-        s = get_settings()
-        _resend = resend.Emails(s.resend_api_key)
-    return _resend
-
-
-async def _send_verification_email(email: str, code: str) -> None:
-    s = get_settings()
-    if not s.resend_api_key:
-        log.debug("resend_api_key not set; skipping email send")
-        return
-    try:
-        await _get_resend().send(
-            from_email="onboarding@resend.dev",
-            to=email,
-            subject="Your NudgeAI verification code",
-            html=f"<p>Your verification code is: <strong>{code}</strong></p>",
-        )
-    except Exception as exc:  # noqa: BLE001 — best-effort delivery
-        log.warning("failed to send verification email to %s: %s", email, exc)
+    The code is never logged when mail is configured, and never outside dev.
+    """
+    subject, html, text = mailer.code_email(code=code, purpose=purpose, ttl_minutes=ttl_minutes)
+    sent = await mailer.send_email(to=email, subject=subject, html=html, text=text)
+    if not sent and not mailer.mail_configured() and get_settings().environment == "dev":
+        log.warning("DEV ONLY: %s code for %s is %s (no mail key set)", purpose, email, code)
 
 
 class AuthError(Exception):
@@ -137,8 +121,8 @@ async def signup(
     await session.commit()
     await session.refresh(user)
 
-    await _send_verification_email(email, code)
-    log.info("signup for %s, verification code issued and emailed", email)
+    await _deliver_code(email, code, EMAIL_VERIFICATION, s.verification_code_ttl_minutes)
+    log.info("signup for %s, verification code issued", email)
     return user, code
 
 
@@ -184,8 +168,8 @@ async def resend_verification(session: AsyncSession, *, email: str) -> str | Non
         )
     )
     await session.commit()
-    await _send_verification_email(email, code)
-    log.info("verification code reissued and emailed for %s", email)
+    await _deliver_code(email, code, EMAIL_VERIFICATION, s.verification_code_ttl_minutes)
+    log.info("verification code reissued for %s", email)
     return code
 
 
@@ -291,6 +275,7 @@ async def request_password_reset(session: AsyncSession, *, email: str) -> str | 
         )
     )
     await session.commit()
+    await _deliver_code(email, code, PASSWORD_RESET, s.password_reset_code_ttl_minutes)
     return code
 
 

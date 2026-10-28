@@ -404,3 +404,70 @@ async def test_tampered_token_rejected(
     tampered = token[:-3] + ("aaa" if not token.endswith("aaa") else "bbb")
     r = await client.get(f"{PREFIX}/me", headers={"Authorization": f"Bearer {tampered}"})
     assert r.status_code == 401
+
+
+# ------------------------------------------------------------------ email delivery
+
+
+async def test_signup_emails_the_verification_code(
+    client: AsyncClient, session: AsyncSession, outbox: list[dict[str, str]]
+) -> None:
+    await _signup(client)
+    assert len(outbox) == 1
+    mail = outbox[0]
+    assert mail["to"] == "ada@example.com"
+    assert mail["from"].startswith("Nudge <")
+    code = await session.scalar(
+        select(VerificationCode).join(User).where(User.email == "ada@example.com")
+    )
+    assert code is not None
+    assert code.code in mail["text"] and code.code in mail["html"]
+    assert code.code in mail["subject"]
+
+
+async def test_forgot_password_emails_a_reset_code_only_for_real_accounts(
+    client: AsyncClient, session: AsyncSession, outbox: list[dict[str, str]]
+) -> None:
+    await _signup(client)
+    await _verify(client, session, "ada@example.com")
+    outbox.clear()
+
+    unknown = await client.post(f"{PREFIX}/forgot-password", json={"email": "nobody@example.com"})
+    assert unknown.status_code == 200
+    assert outbox == []  # no account, no mail, same response
+
+    known = await client.post(f"{PREFIX}/forgot-password", json={"email": "ada@example.com"})
+    assert known.status_code == 200
+    assert [m["to"] for m in outbox] == ["ada@example.com"]
+
+
+async def test_send_failure_does_not_break_signup(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _boom(params: object, api_key: str) -> None:
+        raise RuntimeError("resend is down")
+
+    monkeypatch.setattr("app.infra.mailer._send_sync", _boom)
+    r = await client.post(
+        f"{PREFIX}/signup", json={"email": "grace@example.com", "password": "garden42"}
+    )
+    assert r.status_code == 201  # the user can request a new code
+
+
+def test_code_email_mentions_purpose_and_expiry() -> None:
+    from app.infra.mailer import code_email
+
+    subject, html, text = code_email(code="1234", purpose="password_reset", ttl_minutes=15)
+    assert "1234" in subject and "1234" in html
+    assert "reset your password" in text and "15 minutes" in text
+    _, _, verify_text = code_email(code="1234", purpose="email_verification", ttl_minutes=15)
+    assert "verify your email" in verify_text
+
+
+async def test_mailer_reports_not_sent_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+    from app.infra import mailer
+
+    monkeypatch.setattr(get_settings(), "resend_api_key", "")
+    assert not mailer.mail_configured()
+    assert await mailer.send_email(to="a@b.co", subject="x", html="y") is False

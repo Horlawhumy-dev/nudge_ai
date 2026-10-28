@@ -85,6 +85,9 @@ class Settings(BaseSettings):
 
     # --- email ---
     resend_api_key: str = Field(default="", description="Resend API key for email delivery")
+    # Must be an address on a domain verified in Resend. The shared onboarding@resend.dev
+    # sender can only deliver to the Resend account owner.
+    email_from: str = "Nudge <onboarding@resend.dev>"
 
     # --- phase 2: model router (Meta models only) ---
     # MODEL_FAST is the hackathon id for the open-weight tier served on

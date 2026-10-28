@@ -39,6 +39,36 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ["ENVIRONMENT"] = "test"
 
 
+@pytest.fixture(autouse=True)
+def outbox(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
+    """Capture outgoing email by faking only the Resend SDK call.
+
+    Everything above it (settings, parameter building, the thread hop, failure
+    handling) runs for real.
+    """
+    sent: list[dict[str, str]] = []
+
+    def _fake_send(params: dict[str, object], api_key: str) -> None:
+        assert api_key, "mailer must pass the configured key"
+        to = params["to"]
+        assert isinstance(to, list)
+        sent.append(
+            {
+                "to": str(to[0]),
+                "from": str(params["from"]),
+                "subject": str(params["subject"]),
+                "html": str(params["html"]),
+                "text": str(params.get("text", "")),
+            }
+        )
+
+    # Settings are cached when the app is imported, before pytest_configure runs, so patch
+    # the live object rather than the environment.
+    monkeypatch.setattr(get_settings(), "resend_api_key", "re_test_key")
+    monkeypatch.setattr("app.infra.mailer._send_sync", _fake_send)
+    return sent
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"

@@ -33,7 +33,7 @@ def _raise(exc: auth_service.AuthError) -> None:
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(payload: SignUpRequest, session: SessionDep) -> UserResponse:
     try:
-        user, code = await auth_service.signup(
+        user, _ = await auth_service.signup(
             session,
             email=payload.email,
             password=payload.password,
@@ -42,9 +42,6 @@ async def signup(payload: SignUpRequest, session: SessionDep) -> UserResponse:
         )
     except auth_service.AuthError as exc:
         _raise(exc)
-    # Phase 1 has no mail transport. Surfacing the code keeps the flow testable
-    # end to end; Phase 2 replaces this with a real send.
-    log.warning("verification code for %s is %s (no mail transport yet)", user.email, code)
     return UserResponse.model_validate(user)
 
 
@@ -121,9 +118,7 @@ async def logout(payload: RefreshRequest, session: SessionDep) -> MessageRespons
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -> MessageResponse:
-    code = await auth_service.request_password_reset(session, email=payload.email)
-    if code:
-        log.warning("reset code issued (no mail transport yet): %s", code)
+    await auth_service.request_password_reset(session, email=payload.email)
     # Always the same response, so this cannot be used to enumerate accounts.
     return MessageResponse(message="if that account exists, a reset code is on its way")
 
