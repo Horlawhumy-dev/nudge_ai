@@ -13,6 +13,8 @@ type ProgressRingProps = {
   color: string;
   label?: string;
   labelSize?: 'sm' | 'md';
+  /** Ring track colour; defaults to the neutral grey. */
+  trackColor?: string;
 };
 
 export function ProgressRing({
@@ -22,6 +24,7 @@ export function ProgressRing({
   color,
   label,
   labelSize = 'md',
+  trackColor = colors.borderSoft,
 }: ProgressRingProps) {
   const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
@@ -34,7 +37,7 @@ export function ProgressRing({
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={colors.borderSoft}
+          stroke={trackColor}
           strokeWidth={strokeWidth}
           fill="none"
         />
