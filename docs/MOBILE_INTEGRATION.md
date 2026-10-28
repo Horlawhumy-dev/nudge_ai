@@ -36,12 +36,14 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 | Check a habit in/out | `POST /habits/{id}/complete` / `…/uncomplete` with optional `{on: "YYYY-MM-DD"}` (default today, last 60 days only; idempotent) |
 | Habit detail (week strip, history) | `GET /habits/{id}/completions?from&to` or all habits at once `GET /habits/completions` |
 | Streak screen | `GET /streak` (`current`, `best`, `active_today`), milestones are computed on the client |
-| Tasks tab | `GET /tasks?status=all|upcoming|overdue|completed&from&to`, `POST /tasks`, `PATCH /tasks/{id}`, `POST /tasks/{id}/complete|uncomplete|restore`, `DELETE /tasks/{id}` |
+| Tasks tab | `GET /tasks?status=all|upcoming|overdue|completed&from&to`, `POST /tasks`, `PATCH /tasks/{id}`, `POST /tasks/{id}/complete|uncomplete|restore`, `DELETE /tasks/{id}[?series=true]` (the flag removes a repeating task's later occurrences too) |
 | Progress → Habits | `GET /analytics/habits?period=weekly|monthly[&phrase=true]` |
 | Progress → Tasks | `GET /analytics/tasks?period=weekly|monthly[&phrase=true]` |
 | Weekly report | `GET /analytics/report/weekly` |
 | Notifications (bell) | `GET /notifications`, `POST /notifications/{id}/read`, `POST /notifications/read-all`, `DELETE /notifications/{id}`, `POST /notifications/{id}/restore` |
 | Chat | `POST /chat` (SSE, below), `GET /conversations`, `GET /conversations/{id}`, `DELETE /conversations/{id}` (+ `/restore`) |
+| Photo → tasks | pick a photo → `POST /vision/extract` (raw PNG/JPEG/WebP body, ≤5 MB) → `{message, proposals[]}`; show each proposal with Add/Skip, then `POST /proposals/{id}/confirm` or `/reject` |
+| "How did the AI decide?" | `meta.trace_id` arrives on every chat stream; `GET /traces/{id}`, or `GET /traces?conversation_id=` for a thread |
 | Voice mode | record → `POST /speech/transcribe` (raw audio body, `audio/*`) → send the text to `POST /chat` with `via: "voice"` |
 | Settings → Notification | `GET/PATCH /preferences` (`push_enabled`, `voice_enabled`, `morning_summary_enabled`, `weekly_report_enabled`, `streak_alerts_enabled`) |
 | Settings → Quiet hours | `PATCH /preferences` (`quiet_enabled`, `quiet_start`, `quiet_end`, `quiet_repeat_days` Monday=0, `quiet_allow_priority`). "Weekend quiet hours" = add 5 and 6 to `quiet_repeat_days`. |
@@ -60,7 +62,7 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 
 **Habit** (mobile → API): `name`→`name`, `emoji`→`emoji`, `category`→`category`, `timeOfDay` `Morning|Afternoon|Evening` → `time_of_day` lower-case, `frequency` `Daily|Weekdays|Weekly` → `frequency` lower-case, `goalDays`→`goal_days` (defaults 7/5/1), `stackedAfter`→`stacked_after_id`. Today's tick = `done_today`; the week count = `done_last_7d`; per-habit streak = `streak.current`. Dated history comes from the completions endpoints (replace the client's `completions[]` with those).
 
-**Task**: `title`, `notes`, `priority` `High|Medium|Low` → lower-case, `date` (local day), `startTime`/`endTime` → `start_time`/`end_time` (`null` = all day; end defaults to start + 1 h), `repeat`. The server returns `status` (`upcoming|overdue|completed`), `done`, `all_day` and `due_at`, so the client no longer needs to compute overdue.
+**Task**: `title`, `repeat_rule` (`daily|weekdays|weekly|null`; completing a repeating task creates the next occurrence), `notes`, `priority` `High|Medium|Low` → lower-case, `date` (local day), `startTime`/`endTime` → `start_time`/`end_time` (`null` = all day; end defaults to start + 1 h), `repeat`. The server returns `status` (`upcoming|overdue|completed`), `done`, `all_day` and `due_at`, so the client no longer needs to compute overdue.
 
 **Notification**: `kind` (`nudge|summary|streak|insight|system`), `title`, `body`, `read`, `created_at`, `habit_id`. The client chooses the destination screen from `kind`.
 
@@ -71,7 +73,7 @@ Body: `{ message, conversation_id?, via: "text"|"voice" }`. Response is `text/ev
 
 - React Native has no `EventSource`; read the response body as a stream (`expo/fetch` supports it) and parse `event:`/`data:` frames.
 - The model only sees messages of the given `conversation_id`. Omit it to start a new thread and keep the returned id.
-- **Proposals** (e.g. "push my 10am deep work to 11"): nothing is written until the user confirms with `POST /proposals/{id}/confirm` (or `/reject`). The mobile app has no confirm UI yet.
+- **Proposals** (e.g. "push my 10am deep work to 11"): nothing is written until the user confirms with `POST /proposals/{id}/confirm` (or `/reject`). The mobile app has no confirm UI yet. The assistant can list, add, reschedule and complete tasks and habits this way (`task_create`, `task_update`, `task_complete`, `habit_create`, `habit_complete`); each proposal's `summary` is ready to show on the confirm button, e.g. `Change “Deep work”: start time 11:00`. Reads (`tasks_list`, `habits_list`) run immediately.
 
 ## Push notifications
 
@@ -85,7 +87,7 @@ Free: 3 habits, 5 tasks per day. Exceeding a limit returns **402** with a readab
 
 ```
 cd nudgeai_backend
-make db-migrate        # alembic upgrade head (migrations 0003–0009 are new)
+make db-migrate        # alembic upgrade head (migrations 0003–0011 are new)
 make run               # API on :8079
 make worker            # the nudge worker (separate process)
 ```
@@ -95,8 +97,7 @@ make worker            # the nudge worker (separate process)
 ## Known gaps and things to verify
 
 - **Meta voice transcription URL is unverified.** Meta documents a realtime WebSocket (`wss://api.meta.ai/v1/asr/realtime`); the HTTP upload route used by `POST /speech/transcribe` follows the `/audio/transcriptions` convention and may need changing (`MUSE_VOICE_URL`). Confirm against Meta's docs before demoing voice with a real key. Without a key a deterministic fake answers.
-- **Recurring tasks**: `repeat` is stored but instances are not generated yet.
-- **Weekly report as a push/inbox item** (`weekly_report_enabled`) is a setting only; nothing generates it on a schedule yet.
 - **`quiet_allow_priority`** is stored for future task nudges; the engine only nudges habits today.
-- **Photo → tasks (multimodal)** and the **agent trace view** from the plan are not built.
+- Weekly reports arrive as an inbox message (title "Your weekly report") and a Monday-morning push, once the worker runs.
+- Photo extraction uses the multimodal Meta model; with no key the fake client answers, so test it against a real key before demoing.
 - Avatars are stored on local disk; use object storage if the API runs on more than one host.
