@@ -29,7 +29,22 @@ make format    # prettier --write src README.md
 
 The same commands are available as `npm run start | typecheck | lint | test | format`.
 
-## Try it
+## Connect to the backend
+
+Set `EXPO_PUBLIC_API_URL` to the API's address, including `/api/v1`, and restart Expo:
+
+```bash
+cp .env.example .env       # then edit EXPO_PUBLIC_API_URL
+make start
+```
+
+- On a **phone** use your computer's LAN address (e.g. `http://192.168.1.20:8079/api/v1`), not `localhost`; start the API so the phone can reach it: `make run HOST=0.0.0.0` in `nudgeai_backend`.
+- The Android **emulator** reaches your computer at `http://10.0.2.2:8079/api/v1`; the iOS simulator can use `localhost`.
+- With the URL set the app uses real accounts: sign-up emails a 4-digit code, habits/tasks/settings/chat/notifications live on the server, voice records with the microphone and the chat button can read tasks from a photo. Tokens are kept in the device keychain and refreshed silently.
+- **Push notifications** need a development build and an EAS project id (`npx eas-cli init`); until then the app works without them. With a server account the backend decides when to nudge, so the app's own scheduled reminders are off.
+- Without the URL the app runs in the offline **demo mode** described below.
+
+## Try it (demo mode)
 
 - **Log in** with any valid email and password → seeded demo account (4 habits, 5 tasks, notifications, chat history). Exception: `demo@nudge.ai` needs `Password1!`; a wrong password shows the "Incorrect email or password" error. The login screen has a tap-to-fill hint.
 - **Sign up** → the verification code is `1234` (a wrong code shows an error; the screen has a tap-to-fill hint) → 5-step setup → an empty Home. Signing up with `demo@nudge.ai` shows the "email already exists" error.
@@ -124,8 +139,8 @@ need a development build.
 5. Habits and tasks with create sheets ✅
 6. Home dashboard, nudge banner, empty state ✅
 7. Progress (habits + tasks) ✅
-8. Nudge AI chat: text, history, voice (simulated) ✅
+8. Nudge AI chat: text, history, voice ✅
 9. Settings, profile, subscription (UI only, no billing SDK) ✅
 10. UX pass: persistence, editing, undo, haptics, inbox, reminders, missing screens ✅
-11. Backend wiring: API client, auth tokens, real data, remote push, speech
+11. Backend wiring: API client, auth tokens, real data, remote push, speech ✅ (needs a real-device pass: push, microphone, photo upload)
 12. Polish: dark pass, a11y audit, error states, release config
