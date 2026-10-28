@@ -13,6 +13,7 @@ from app.api.v1 import (
     nudges,
     ops,
     speech,
+    traces,
     vision,
 )
 
@@ -26,6 +27,7 @@ api_router.include_router(nudges.router)
 api_router.include_router(notifications.router)
 api_router.include_router(speech.router)
 api_router.include_router(vision.router)
+api_router.include_router(traces.router)
 api_router.include_router(analytics.router)
 
 # ops sits outside the versioned prefix: /health and /metrics are infra endpoints.

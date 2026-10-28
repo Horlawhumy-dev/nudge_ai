@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any, Literal
 from uuid import UUID
 
@@ -21,7 +22,7 @@ from app.core.config import get_settings
 from app.db.models import ChatMessage, Preference, ToolProposal
 from app.models.budgets import seconds_until_reset
 from app.models.router import RouteRequest
-from app.services import conversation_service, memory_service
+from app.services import conversation_service, memory_service, trace_service
 from app.services.core_service import NotFound
 from app.tools import calendar as calendar_tools
 from app.tools import memory as memory_tools
@@ -183,6 +184,7 @@ async def chat(
         yield _sse("conversation", {"id": str(conversation_id), "title": conversation_title})
         executor = Executor()
         result: TurnResult | None = None
+        started = time.monotonic()
         try:
             result = await executor.run(
                 user_id=user_id,
@@ -197,6 +199,20 @@ async def chat(
             log.exception("chat turn failed")
             yield _sse("error", {"message": str(exc)})
             return
+
+        trace_id: str | None = None
+        try:
+            trace = await trace_service.record(
+                session,
+                user_id,
+                conversation_id=conversation_id,
+                prompt=body.message,
+                result=result,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+            trace_id = str(trace.id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("trace not recorded: %s", exc)
 
         # The reply, in one delta, then the machine-readable tail.
         yield _sse("message", {"content": result.content})
@@ -213,7 +229,7 @@ async def chat(
                     "resets_in_seconds": seconds_until_reset(),
                 },
             )
-        yield _sse("meta", result.metadata)
+        yield _sse("meta", {**result.metadata, "trace_id": trace_id})
         yield _sse("done", {})
 
         await _persist(

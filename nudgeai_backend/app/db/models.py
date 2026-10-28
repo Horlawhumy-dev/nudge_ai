@@ -12,6 +12,7 @@ from sqlalchemy import (
     Computed,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -554,6 +555,45 @@ class Conversation(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_conversations_user_updated", "user_id", "updated_at"),)
+
+
+class ChatTrace(Base):
+    """How one assistant turn was produced: the route, each hop, the tools and what it cost.
+
+    The mobile "how did the AI decide this" view reads these. Rows hold the shape of the
+    turn (tier, tool names, outcomes), not the conversation text, which lives in chat_messages.
+    """
+
+    __tablename__ = "chat_traces"
+
+    id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    prompt_preview: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    tier: Mapped[str] = mapped_column(String(16), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    hops: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    tool_results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    proposal_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    escalations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    degraded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_chat_traces_user_created", "user_id", "created_at"),)
 
 
 class ChatMessage(Base):
