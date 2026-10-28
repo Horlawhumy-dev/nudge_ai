@@ -319,8 +319,10 @@ async def test_stacking_rejects_self_loops_and_foreign_triggers(
     assert loop.status_code == 422 and "loop" in loop.json()["detail"]
 
     theirs = await _habit(client, b, name="Theirs")
+    # a has used the Free plan's three habits, so try the foreign trigger as a fresh user
+    c = await _authed(client, session, "loop-c@example.com")
     stolen = await client.post(
-        H, json={"name": "Mine", "stacked_after_id": theirs["id"]}, headers=a
+        H, json={"name": "Mine", "stacked_after_id": theirs["id"]}, headers=c
     )
     assert stolen.status_code == 404  # another user's habit doesn't exist for you
 

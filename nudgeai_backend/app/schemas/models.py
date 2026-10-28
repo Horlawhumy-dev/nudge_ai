@@ -565,6 +565,33 @@ class DeviceResponse(ORMModel):
     created_at: datetime
 
 
+# ================================================================ subscription
+
+
+class PlanLimits(BaseModel):
+    habits: int | None  # None means unlimited
+    tasks_per_day: int | None
+
+
+class PlanUsage(BaseModel):
+    habits: int
+    tasks_today: int
+
+
+class SubscriptionResponse(BaseModel):
+    plan: Literal["free", "pro"]
+    period: Literal["monthly", "yearly"] | None
+    status: str
+    renews_at: datetime | None
+    limits: PlanLimits
+    usage: PlanUsage
+
+
+class SubscriptionUpdate(BaseModel):
+    plan: Literal["free", "pro"]
+    period: Literal["monthly", "yearly"] = "monthly"
+
+
 # ====================================================== progress and reports
 
 

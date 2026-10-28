@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.config import get_settings
 from app.db.models import Habit, OnboardingProfile, Task
 from app.schemas.models import (
     CheckinRequest,
@@ -22,12 +23,14 @@ from app.schemas.models import (
     PreferenceResponse,
     PreferenceUpdate,
     ProfileUpdate,
+    SubscriptionResponse,
+    SubscriptionUpdate,
     TaskCreate,
     TaskResponse,
     TaskUpdate,
     UserResponse,
 )
-from app.services import core_service, media_service
+from app.services import core_service, media_service, plan_service
 from app.services.core_service import Conflict, Invalid, NotFound
 
 router = APIRouter(tags=["core"])
@@ -55,6 +58,9 @@ async def _http[T](fn: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any) -
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Invalid as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except plan_service.PlanLimitReached as exc:
+        # 402: the request is fine, the plan is the problem. Clients show the upgrade prompt.
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
 
 # ================================================================== profile
@@ -236,6 +242,7 @@ def _range(start: date | None, end: date | None, *, today: date) -> tuple[date, 
 async def create_habit(
     payload: HabitCreate, user: CurrentUser, session: SessionDep
 ) -> HabitResponse:
+    await _http(plan_service.check_can_add_habit, session, user)
     habit = await _http(core_service.create_habit, session, user.id, **payload.model_dump())
     return await _one(session, user, habit)
 
@@ -332,6 +339,7 @@ async def uncomplete_habit(
 @router.post("/habits/{habit_id}/restore", response_model=HabitResponse)
 async def restore_habit(habit_id: UUID, user: CurrentUser, session: SessionDep) -> HabitResponse:
     """Undo a delete (the mobile "Undo" toast)."""
+    await _http(plan_service.check_can_add_habit, session, user)
     habit = await _http(core_service.restore_habit, session, user.id, habit_id)
     return await _one(session, user, habit)
 
@@ -366,6 +374,11 @@ def _task_out(task: Task, now: datetime) -> TaskResponse:
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(payload: TaskCreate, user: CurrentUser, session: SessionDep) -> TaskResponse:
+    zone = core_service.user_zone(user)
+    day = payload.date or (
+        payload.due_at.astimezone(zone).date() if payload.due_at else core_service.local_today(user)
+    )
+    await _http(plan_service.check_can_add_task, session, user, day)
     task = await _http(core_service.create_task, session, user, **payload.model_dump())
     return _task_out(task, datetime.now(UTC))
 
@@ -431,6 +444,9 @@ async def uncomplete_task(task_id: UUID, user: CurrentUser, session: SessionDep)
 @router.post("/tasks/{task_id}/restore", response_model=TaskResponse)
 async def restore_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> TaskResponse:
     """Undo a delete (the mobile "Undo" toast)."""
+    existing = await session.get(Task, task_id)
+    if existing is not None and existing.user_id == user.id and existing.date is not None:
+        await _http(plan_service.check_can_add_task, session, user, existing.date)
     task = await _http(core_service.restore_task, session, user.id, task_id)
     return _task_out(task, datetime.now(UTC))
 
@@ -439,3 +455,24 @@ async def restore_task(task_id: UUID, user: CurrentUser, session: SessionDep) ->
 async def delete_task(task_id: UUID, user: CurrentUser, session: SessionDep) -> Response:
     await _http(core_service.delete_task, session, user.id, task_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ============================================================== subscription
+
+
+@router.get("/subscription", response_model=SubscriptionResponse)
+async def get_subscription(user: CurrentUser, session: SessionDep) -> SubscriptionResponse:
+    """The current plan, what it allows, and how much of that is used."""
+    return await plan_service.current(session, user, today=core_service.local_today(user))
+
+
+@router.put("/subscription", response_model=SubscriptionResponse)
+async def put_subscription(
+    payload: SubscriptionUpdate, user: CurrentUser, session: SessionDep
+) -> SubscriptionResponse:
+    """Switch plan. There's no billing provider yet, so this is a stub gated by
+    BILLING_STUB_ENABLED; with it off the endpoint is not implemented."""
+    if not get_settings().billing_stub_enabled:
+        raise HTTPException(status_code=501, detail="plan changes need the billing provider")
+    await plan_service.switch(session, user, plan=payload.plan, period=payload.period)
+    return await plan_service.current(session, user, today=core_service.local_today(user))

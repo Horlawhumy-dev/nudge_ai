@@ -96,6 +96,15 @@ class Settings(BaseSettings):
     # --- tools ---
     calendar_enabled: bool = False  # deterministic stub until a real credential exists
 
+    # --- plans ---
+    # What Free includes (the numbers shown on the app's subscription screen). Pro is unlimited.
+    free_habit_limit: int = 3
+    free_tasks_per_day: int = 5
+    # There is no billing provider yet. While true, a signed-in user can switch plan themselves
+    # through PUT /subscription so the whole app can be exercised. Turn off in production and
+    # replace with the store/webhook flow.
+    billing_stub_enabled: bool = True
+
     # --- push (Expo) ---
     push_delivery_enabled: bool = True
     expo_push_url: str = "https://exp.host/--/api/v2/push/send"
