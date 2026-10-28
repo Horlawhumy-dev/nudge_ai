@@ -174,3 +174,19 @@ def test_default_url_derives_from_the_meta_base(monkeypatch: pytest.MonkeyPatch)
     assert speech.transcribe_url() == "https://api.meta.ai/v1/asr/transcribe"
     monkeypatch.setattr(s, "muse_voice_url", "https://custom/asr")
     assert speech.transcribe_url() == "https://custom/asr"
+
+
+async def test_audio_is_processed_in_memory_and_never_stored(
+    client: AsyncClient,
+    auth_headers: Headers,
+    _tmp_media,
+    session,  # type: ignore[no-untyped-def]
+) -> None:
+    from sqlalchemy import func, select
+
+    from app.db.models import ChatMessage
+
+    assert (await _post(client, auth_headers)).status_code == 200
+    # nothing was written under the media directory, and a transcription isn't a chat message
+    assert [p for p in _tmp_media.rglob("*") if p.is_file()] == []
+    assert await session.scalar(select(func.count()).select_from(ChatMessage)) == 0
