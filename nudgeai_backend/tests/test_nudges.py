@@ -261,8 +261,8 @@ async def test_burst_at_digest_time_collapses_to_one_nudge(
     assert report.digest_sent
     assert len(report.nudge_ids) == 4  # 1 digest + 3 collapsed
 
-    digest = await session.scalar(select(Nudge).where(Nudge.habit_id.is_(None)))
-    assert digest is not None and digest.status == "sent"
+    digest = await session.scalar(select(Nudge).where(Nudge.kind == "summary"))
+    assert digest is not None and digest.status == "sent" and digest.title
     assert digest.body == DIGEST_BODY
 
 

@@ -306,6 +306,11 @@ class Task(Base):
 # =================================================================== nudges
 
 
+# Kinds the engine produces. "system" and "insight" messages share the table (so they appear in
+# the inbox) but are not nudges: they must never count toward caps, lists or analytics.
+ENGINE_KINDS = ("nudge", "streak", "summary")
+
+
 class Nudge(Base):
     __tablename__ = "nudges"
 
@@ -328,14 +333,49 @@ class Nudge(Base):
     prompt_tokens: Mapped[int | None] = mapped_column(Integer)
     completion_tokens: Mapped[int | None] = mapped_column(Integer)
     skip_reason: Mapped[str | None] = mapped_column(String(64))
+    # Inbox presentation: what kind of message it is, its headline, and the user's reaction.
+    kind: Mapped[str] = mapped_column(
+        String(16), default="nudge", server_default="nudge", nullable=False
+    )
+    title: Mapped[str | None] = mapped_column(String(160))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         CheckConstraint(
             "status in ('scheduled','sent','snoozed','skipped','failed')", name="ck_nudge_status"
         ),
+        CheckConstraint(
+            "kind in ('nudge','summary','streak','insight','system')", name="ck_nudge_kind"
+        ),
         Index("ix_nudges_user_status", "user_id", "status"),
         Index("ix_nudges_scheduled", "scheduled_for"),
+    )
+
+
+class Device(Base):
+    """A phone that can receive push notifications (an Expo push token)."""
+
+    __tablename__ = "devices"
+
+    id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    # Set when the push service reports the token dead (app uninstalled); never sent to again.
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint("platform in ('ios','android','web')", name="ck_device_platform"),
     )
 
 

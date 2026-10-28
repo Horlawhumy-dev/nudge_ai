@@ -52,6 +52,7 @@ from app.engine.scheduler import (
 )
 from app.infra.redis import get_redis, redis_ping
 from app.models.client import ChatClient, ModelError, get_client
+from app.services import notification_service
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +161,9 @@ async def evaluate_user(
             errors.append(f"{c.habit_name}: {exc}")
 
     await session.commit()
+    # Phones get the new messages only after they're safely stored; the inbox is the source
+    # of truth, push is the nudge to look at it.
+    await notification_service.deliver(session, user_id, nudge_ids)
     return UserReport(
         user_id=user_id,
         evaluated=evaluated,
@@ -191,6 +195,9 @@ async def _send_single(
         sent_at=now_utc,
         status="sent",
         body=composed.text,
+        kind="streak" if ec.decision.verdict.priority else "nudge",
+        title=("Streak at risk: " if ec.decision.verdict.priority else "")
+        + ec.candidate.habit_name,
         model_id=composed.model_id,
         prompt_tokens=composed.prompt_tokens,
         completion_tokens=composed.completion_tokens,
@@ -226,6 +233,8 @@ async def _send_digest(
         sent_at=now_utc,
         status="sent",
         body=composed.text,
+        kind="summary",
+        title="Your morning summary",
         model_id=composed.model_id,
         prompt_tokens=composed.prompt_tokens,
         completion_tokens=composed.completion_tokens,

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (
+    ENGINE_KINDS,
     Habit,
     HabitCompletion,
     Nudge,
@@ -25,7 +26,10 @@ async def list_nudges(
     session: AsyncSession, user_id: UUID, *, status: str | None = None, limit: int = 50
 ) -> list[Nudge]:
     stmt = (
-        select(Nudge).where(Nudge.user_id == user_id).order_by(Nudge.created_at.desc()).limit(limit)
+        select(Nudge)
+        .where(Nudge.user_id == user_id, Nudge.kind.in_(ENGINE_KINDS))
+        .order_by(Nudge.created_at.desc())
+        .limit(limit)
     )
     if status is not None:
         if status not in NUDGE_STATUSES:
@@ -132,6 +136,7 @@ async def analytics_overview(
             .where(
                 Nudge.user_id == user_id,
                 Nudge.status == "sent",
+                Nudge.kind.in_(ENGINE_KINDS),
                 Nudge.sent_at >= week_ago,
             )
         )

@@ -21,6 +21,7 @@ from app.core.security import (
 )
 from app.db.models import RefreshToken, User, VerificationCode
 from app.infra import mailer
+from app.services import notification_service
 
 log = logging.getLogger(__name__)
 
@@ -183,6 +184,13 @@ async def verify_email(session: AsyncSession, *, email: str, code: str) -> User:
         raise AuthError(409, "email already verified")
     await _consume_code(session, user.id, code, EMAIL_VERIFICATION)
     user.is_email_verified = True
+    await notification_service.create_notification(
+        session,
+        user.id,
+        kind="system",
+        title="Welcome to Nudge",
+        body="Ask Nudge AI to reschedule a task, summarise your day, or suggest new habits.",
+    )
     await session.commit()
     await session.refresh(user)
     return user

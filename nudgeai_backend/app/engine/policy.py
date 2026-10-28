@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.tone import style_for
 from app.db.models import (
+    ENGINE_KINDS,
     Habit,
     HabitCompletion,
     Nudge,
@@ -178,7 +179,11 @@ async def load_candidates(
         await session.scalar(
             select(func.count())
             .select_from(Nudge)
-            .where(Nudge.user_id == user_id, Nudge.sent_at >= day_start_utc)
+            .where(
+                Nudge.user_id == user_id,
+                Nudge.sent_at >= day_start_utc,
+                Nudge.kind.in_(ENGINE_KINDS),
+            )
         )
         or 0
     )

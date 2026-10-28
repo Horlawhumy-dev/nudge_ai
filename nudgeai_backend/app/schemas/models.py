@@ -507,6 +507,37 @@ class FeedbackResponse(BaseModel):
     kind: str
 
 
+# ========================================================== inbox and devices
+
+NotificationKind = Literal["nudge", "summary", "streak", "insight", "system"]
+
+
+class NotificationResponse(BaseModel):
+    id: UUID
+    kind: NotificationKind
+    title: str
+    body: str
+    habit_id: UUID | None
+    read: bool
+    created_at: datetime
+
+
+class InboxResponse(BaseModel):
+    items: list[NotificationResponse]
+    unread_count: int
+
+
+class DeviceRegister(BaseModel):
+    token: str = Field(min_length=10, max_length=255, pattern=r"^(Expo|Exponent)PushToken\[.+\]$")
+    platform: Literal["ios", "android", "web"]
+
+
+class DeviceResponse(ORMModel):
+    id: UUID
+    platform: str
+    created_at: datetime
+
+
 # ================================================================ analytics
 
 

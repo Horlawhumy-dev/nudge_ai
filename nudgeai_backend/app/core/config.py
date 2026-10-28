@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     # --- tools ---
     calendar_enabled: bool = False  # deterministic stub until a real credential exists
 
+    # --- push (Expo) ---
+    push_delivery_enabled: bool = True
+    expo_push_url: str = "https://exp.host/--/api/v2/push/send"
+    expo_access_token: str = ""
+    push_timeout_seconds: float = 10.0
+
     # --- uploads ---
     # Avatars are written here and served read-only at /media. Point it at a persistent volume
     # in production; swap for object storage when the app runs on more than one host.
