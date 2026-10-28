@@ -49,7 +49,7 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 | Settings → Quiet hours | `PATCH /preferences` (`quiet_enabled`, `quiet_start`, `quiet_end`, `quiet_repeat_days` Monday=0, `quiet_allow_priority`). "Weekend quiet hours" = add 5 and 6 to `quiet_repeat_days`. |
 | Settings → AI voice & tone | `PATCH /preferences` (`reminder_tone`, `use_name_in_reminders`, `include_streak_in_reminders`, `use_emojis_in_reminders`) |
 | Settings → Wake/Sleep, stacking | `PATCH /onboarding {wake_time}` / `{sleep_time}`; `PATCH /preferences {habit_stacking_enabled}` |
-| Profile / Edit profile | `GET /profile`, `PATCH /profile {name, timezone}`, `POST /profile/avatar` (raw PNG/JPEG/WebP body), `DELETE /profile/avatar` |
+| Profile / Edit profile | `GET /profile`, `PATCH /profile {name, timezone}`, profile photo: see *Profile photos* below, `DELETE /profile/avatar` |
 | Change email | `POST /auth/change-email {new_email, password}` → code sent to the new address → `POST /auth/confirm-email-change {code}` |
 | Change password | `POST /auth/change-password {current_password, new_password}` → **new tokens** (other sessions are signed out; replace the stored pair) |
 | Subscription | `GET /subscription` (plan, limits, usage), `PUT /subscription {plan, period}` (stub, see below) |
@@ -65,6 +65,17 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 **Task**: `title`, `repeat_rule` (`daily|weekdays|weekly|null`; completing a repeating task creates the next occurrence), `notes`, `priority` `High|Medium|Low` → lower-case, `date` (local day), `startTime`/`endTime` → `start_time`/`end_time` (`null` = all day; end defaults to start + 1 h), `repeat`. The server returns `status` (`upcoming|overdue|completed`), `done`, `all_day` and `due_at`, so the client no longer needs to compute overdue.
 
 **Notification**: `kind` (`nudge|summary|streak|insight|system`), `title`, `body`, `read`, `created_at`, `habit_id`. The client chooses the destination screen from `kind`.
+
+## Profile photos
+
+Users carry `avatar_url` (full size, 512×512, cropped square around the face) and `avatar_thumb_url` (96 px, auto format/quality: use it in lists, headers and the home greeting). Both are `null` without a photo. Show the picked photo immediately and swap in the URL once saved.
+
+1. `POST /profile/avatar/intent` → `{method, max_bytes, …}`. Check `max_bytes` on the device before uploading (resize with expo-image-manipulator if needed).
+2. `method: "cloudinary"` (production): upload **straight to Cloudinary** so the app gets real progress: multipart `POST` to `upload_url` with every entry of `fields` plus the file under `file_field`. Take `secure_url` from the reply and call `PUT /profile/avatar {url}`. The server only accepts URLs that were signed for that user (400 otherwise) and deletes the previous photo.
+3. `method: "api"` (no Cloudinary configured, e.g. local dev): send the raw bytes to `POST /profile/avatar`, as before. This route also works when Cloudinary is on (the server uploads for you), so it is a fine fallback if the direct upload fails.
+4. A 503 from `POST /profile/avatar` means the image service hiccupped; the old photo is untouched, so offer "Try again".
+
+Old `/media/avatars/...` URLs keep working. The signed fields expire after about an hour, so request a fresh intent per attempt.
 
 ## Chat stream (`POST /chat`)
 
@@ -92,7 +103,7 @@ make run               # API on :8079
 make worker            # the nudge worker (separate process)
 ```
 
-`.env` additions (see `.env.example`): `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend (the default sender only reaches the Resend account owner), `CORS_ORIGINS`, `MEDIA_DIR` (persistent volume), `EXPO_ACCESS_TOKEN` (optional), `META_API_KEY`/`BASETEN_API_KEY`, `MUSE_VOICE_MODEL`, `JWT_SECRET` (32+ bytes outside dev).
+`.env` additions (see `.env.example`): `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend (the default sender only reaches the Resend account owner), `CORS_ORIGINS`, `MEDIA_DIR` (local fallback only), `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` (avatars; all three enable it), `EXPO_ACCESS_TOKEN` (optional), `META_API_KEY`/`BASETEN_API_KEY`, `MUSE_VOICE_MODEL`, `JWT_SECRET` (32+ bytes outside dev).
 
 ## Known gaps and things to verify
 
@@ -100,4 +111,4 @@ make worker            # the nudge worker (separate process)
 - **`quiet_allow_priority`** is stored for future task nudges; the engine only nudges habits today.
 - Weekly reports arrive as an inbox message (title "Your weekly report") and a Monday-morning push, once the worker runs.
 - Photo extraction uses the multimodal Meta model; with no key the fake client answers, so test it against a real key before demoing.
-- Avatars are stored on local disk; use object storage if the API runs on more than one host.
+- Avatars use Cloudinary once its three keys are set; until then they sit on local disk (single host only). A direct upload the app never attaches is left behind in the `nudge/avatars` folder; clean it with a Cloudinary lifecycle rule if that matters.

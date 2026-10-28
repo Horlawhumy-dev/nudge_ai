@@ -5,9 +5,18 @@ from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.core.security import password_problems
+from app.infra import cloudinary
 
 TimeStr = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
 
@@ -113,6 +122,24 @@ class UserResponse(ORMModel):
     avatar_url: str | None = None
     pending_email: EmailStr | None = None
     created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def avatar_thumb_url(self) -> str | None:
+        """A small optimised copy for lists and headers; same as avatar_url for local files."""
+        return cloudinary.thumb_url(self.avatar_url)
+
+
+class AvatarIntent(BaseModel):
+    method: Literal["cloudinary", "api"]
+    max_bytes: int
+    upload_url: str | None = None
+    fields: dict[str, str] | None = None
+    file_field: str | None = None
+
+
+class AvatarAttach(BaseModel):
+    url: str = Field(max_length=500)
 
 
 class ChangePasswordRequest(BaseModel):

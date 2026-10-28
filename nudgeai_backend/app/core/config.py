@@ -117,6 +117,13 @@ class Settings(BaseSettings):
     # in production; swap for object storage when the app runs on more than one host.
     media_dir: str = "media"
     avatar_max_bytes: int = 2_000_000
+    # Cloudinary takes over avatar storage when all three credentials are set; otherwise the
+    # local directory above is used. Uploads are cropped square around the face on arrival.
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+    cloudinary_folder: str = "nudge"
+    cloudinary_timeout_seconds: float = 20.0
 
     # --- email ---
     resend_api_key: str = Field(default="", description="Resend API key for email delivery")
@@ -209,6 +216,12 @@ class Settings(BaseSettings):
                 "32. Generate one with: "
                 'python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
+
+    @property
+    def cloudinary_enabled(self) -> bool:
+        return bool(
+            self.cloudinary_cloud_name and self.cloudinary_api_key and self.cloudinary_api_secret
+        )
 
     @property
     def sync_database_url(self) -> str:

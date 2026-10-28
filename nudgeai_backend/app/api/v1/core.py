@@ -12,6 +12,8 @@ from app.core.config import get_settings
 from app.db.models import Habit, OnboardingProfile, Task
 from app.schemas.models import (
     AppFeedbackResponse,
+    AvatarAttach,
+    AvatarIntent,
     CheckinRequest,
     CompletionsResponse,
     FeedbackCreate,
@@ -95,12 +97,38 @@ async def upload_avatar(request: Request, user: CurrentUser, session: SessionDep
         url = await media_service.store_avatar(user.id, request.stream())
     except media_service.UploadError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    return await _set_avatar(session, user, url)
+
+
+async def _set_avatar(session: SessionDep, user: CurrentUser, url: str) -> UserResponse:
     previous = user.avatar_url
     user.avatar_url = url
     await session.commit()
-    media_service.remove_avatar_file(previous)
+    if previous != url:
+        await media_service.remove_avatar(previous)
     await session.refresh(user)
     return UserResponse.model_validate(user)
+
+
+@router.post("/profile/avatar/intent", response_model=AvatarIntent)
+async def avatar_intent(user: CurrentUser) -> AvatarIntent:
+    """Ask how to upload a new photo.
+
+    ``method: "cloudinary"``: POST the file plus ``fields`` as multipart form data to
+    ``upload_url`` (gives real upload progress), then ``PUT /profile/avatar`` with the
+    returned ``secure_url``. ``method: "api"``: send the raw bytes to ``POST /profile/avatar``.
+    """
+    return AvatarIntent(**media_service.avatar_intent(user.id))
+
+
+@router.put("/profile/avatar", response_model=UserResponse)
+async def attach_avatar(body: AvatarAttach, user: CurrentUser, session: SessionDep) -> UserResponse:
+    """Finish a direct upload: point the profile at the image the app just sent to Cloudinary."""
+    try:
+        url = media_service.attachable_avatar_url(user.id, body.url)
+    except media_service.UploadError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    return await _set_avatar(session, user, url)
 
 
 @router.delete("/profile/avatar", response_model=UserResponse)
@@ -108,7 +136,7 @@ async def remove_avatar(user: CurrentUser, session: SessionDep) -> UserResponse:
     previous = user.avatar_url
     user.avatar_url = None
     await session.commit()
-    media_service.remove_avatar_file(previous)
+    await media_service.remove_avatar(previous)
     await session.refresh(user)
     return UserResponse.model_validate(user)
 
