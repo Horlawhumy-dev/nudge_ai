@@ -1,18 +1,36 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, Linking } from 'react-native';
+import { AppState, Linking, Share } from 'react-native';
 
 import { ConfirmDialog, ListRow, Screen, ScreenHeader, SectionCard, Text } from '@/components/ui';
+import { DEMO_MODE } from '@/constants/env';
+import { accountApi } from '@/services/api/endpoints/account';
 import { hasReminderPermission, remindersAvailable } from '@/services/notifications';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useChatStore } from '@/store/useChatStore';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
+async function shareExport() {
+  const data = await accountApi.exportData();
+  await Share.share({ title: 'My Nudge data', message: JSON.stringify(data, null, 2) });
+}
+
 export default function PrivacyAndSecurity() {
   const router = useRouter();
   const email = useAuthStore((s) => s.user?.email ?? 'your email');
   const clearAllChats = useChatStore((s) => s.deleteAll);
+  const downloadData = async () => {
+    if (DEMO_MODE) {
+      toast.show(`We’ll email a copy of your data to ${email}.`);
+      return;
+    }
+    try {
+      await shareExport();
+    } catch {
+      toast.error('Couldn’t prepare your data. Check your connection and try again.');
+    }
+  };
   const chatCount = useChatStore((s) => s.conversations.length);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -63,7 +81,7 @@ export default function PrivacyAndSecurity() {
           title="Download my data"
           subtitle="Get a copy of your habits, tasks and chats"
           icon="download-outline"
-          onPress={() => toast.show(`We’ll email a copy of your data to ${email}.`)}
+          onPress={() => void downloadData()}
         />
         <ListRow
           title="Clear chat history"
@@ -77,7 +95,9 @@ export default function PrivacyAndSecurity() {
       </SectionCard>
 
       <Text variant="caption" color={colors.textMuted} align="center">
-        Your habits, tasks and chats are stored on this device in this version of Nudge.
+        {DEMO_MODE
+          ? 'Your habits, tasks and chats are stored on this device in this version of Nudge.'
+          : 'Your habits, tasks and chats are stored securely in your Nudge account. Voice recordings are never saved.'}
       </Text>
 
       <ConfirmDialog

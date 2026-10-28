@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
+import { DEMO_MODE } from '@/constants/env';
+import { accountApi } from '@/services/api/endpoints/account';
 import { ConfirmDialog, ListRow, Screen, ScreenHeader, SectionCard } from '@/components/ui';
 import { RateDialog } from '@/features/settings/components/RateDialog';
 import { ToggleRow } from '@/features/settings/components/ToggleRow';
@@ -110,9 +112,12 @@ export default function Settings() {
       <RateDialog
         visible={rating}
         onClose={() => setRating(false)}
-        onSubmit={(stars) =>
-          toast.success(stars >= 4 ? 'Thanks for the love! 💜' : 'Thanks, we’ll keep improving.')
-        }
+        onSubmit={(stars) => {
+          if (!DEMO_MODE) {
+            void accountApi.sendFeedback({ category: 'rating', stars }).catch(() => undefined);
+          }
+          toast.success(stars >= 4 ? 'Thanks for the love! 💜' : 'Thanks, we’ll keep improving.');
+        }}
       />
       <ConfirmDialog
         visible={confirmDelete}
@@ -122,7 +127,12 @@ export default function Settings() {
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
           setConfirmDelete(false);
-          signOut();
+          // A real account needs its password to be deleted; the demo just signs out.
+          if (!DEMO_MODE) {
+            router.push('/settings/delete-account');
+            return;
+          }
+          void signOut();
           router.replace('/');
         }}
       />

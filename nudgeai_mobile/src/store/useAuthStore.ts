@@ -109,6 +109,8 @@ type AuthState = {
   saveName: (name: string) => Promise<void>;
   /** Show the chosen photo at once, upload it, and put the old one back if that fails. */
   changePhoto: (uri: string, onProgress?: (fraction: number) => void) => Promise<void>;
+  /** Permanently delete the account (the server asks for the password). */
+  deleteAccount: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -381,6 +383,12 @@ export const useAuthStore = create<AuthState>()(
           );
           throw authError(e);
         }
+      },
+
+      deleteAccount: async (password) => {
+        if (!DEMO_MODE) await authApi.deleteAccount(password); // throws if the password is wrong
+        clearLocalData();
+        set({ status: 'signedOut', user: null, pendingEmail: null, resetCode: null });
       },
 
       signOut: async () => {

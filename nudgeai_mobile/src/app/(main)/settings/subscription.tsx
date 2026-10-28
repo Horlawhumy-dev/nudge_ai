@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, Card, Icon, Screen, ScreenHeader, Text } from '@/components/ui';
+import { DEMO_MODE } from '@/constants/env';
+import { accountApi } from '@/services/api/endpoints/account';
+import { toast } from '@/store/useToastStore';
 import { PLANS, type Billing } from '@/features/settings/plans';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { colors, radius } from '@/theme';
@@ -20,6 +23,24 @@ function Feature({ label }: { label: string }) {
 export default function Subscription() {
   const plan = usePreferencesStore((s) => s.plan);
   const setPreferences = usePreferencesStore((s) => s.set);
+  const [saving, setSaving] = useState(false);
+  // Plan changes go through the server, which owns the limits (3 habits, 5 tasks a day on Free).
+  const choose = async (next: 'free' | 'pro') => {
+    if (DEMO_MODE) {
+      setPreferences({ plan: next });
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await accountApi.changePlan(next, billing);
+      setPreferences({ plan: saved.plan });
+      toast.success(saved.plan === 'pro' ? 'Welcome to Pro! 🎉' : 'You’re on the Free plan.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Couldn’t change your plan. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
   const [billing, setBilling] = useState<Billing>('monthly');
   const pro = PLANS.pro[billing];
 
@@ -63,8 +84,8 @@ export default function Subscription() {
         <Button
           label={plan === 'free' ? 'Current plan' : 'Switch to Free'}
           variant="outline"
-          disabled={plan === 'free'}
-          onPress={() => setPreferences({ plan: 'free' })}
+          disabled={plan === 'free' || saving}
+          onPress={() => void choose('free')}
         />
         <View style={styles.features}>
           {PLANS.free.features.map((f) => (
@@ -87,8 +108,9 @@ export default function Subscription() {
         </Text>
         <Button
           label={plan === 'pro' ? 'Current plan' : 'Get pro plan'}
-          disabled={plan === 'pro'}
-          onPress={() => setPreferences({ plan: 'pro' })}
+          disabled={plan === 'pro' || saving}
+          loading={saving}
+          onPress={() => void choose('pro')}
           testID="get-pro"
         />
         <View style={styles.features}>

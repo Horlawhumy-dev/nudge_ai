@@ -191,4 +191,20 @@ describe('auth store with a backend', () => {
       avatarThumbUri: 'https://cdn/thumb.jpg',
     });
   });
+
+  it('deletes the account with the password and signs out', async () => {
+    useAuthStore.setState({ status: 'ready', user: { id: 'u1', name: 'Ada', email: 'a@b.co' } });
+    await useAuthStore.getState().deleteAccount('Passw0rd!');
+    expect(auth.deleteAccount).toHaveBeenCalledWith('Passw0rd!');
+    expect(useAuthStore.getState()).toMatchObject({ status: 'signedOut', user: null });
+  });
+
+  it('stays signed in when the password is wrong', async () => {
+    useAuthStore.setState({ status: 'ready', user: { id: 'u1', name: 'Ada', email: 'a@b.co' } });
+    auth.deleteAccount.mockRejectedValue(new ApiError('incorrect password', 403));
+    await expect(useAuthStore.getState().deleteAccount('nope')).rejects.toThrow(
+      'incorrect password'
+    );
+    expect(useAuthStore.getState().status).toBe('ready');
+  });
 });

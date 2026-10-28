@@ -13,7 +13,7 @@ import { colors, radius, shadows } from '@/theme';
 
 import { Text } from './Text';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'dark' | 'outline' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'dark' | 'outline' | 'ghost' | 'danger';
 
 type ButtonProps = {
   label: string;
@@ -33,6 +33,7 @@ const surface: Record<ButtonVariant, { bg: string; fg: string; border?: string }
   dark: { bg: colors.inverse, fg: colors.textOnInverse },
   outline: { bg: colors.surface, fg: colors.primary, border: colors.primary },
   ghost: { bg: 'transparent', fg: colors.primary },
+  danger: { bg: colors.danger, fg: colors.white },
 };
 
 export function Button({

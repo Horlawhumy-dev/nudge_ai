@@ -6,7 +6,10 @@ import { Button, FormError, Screen, ScreenHeader, TextField } from '@/components
 import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useField } from '@/hooks/useField';
+import { DEMO_MODE } from '@/constants/env';
 import { sleep } from '@/lib/format';
+import { authApi } from '@/services/api/endpoints/auth';
+import { ApiError } from '@/services/api/errors';
 import { haptics } from '@/lib/haptics';
 import {
   validateConfirmPassword,
@@ -44,14 +47,24 @@ export default function ChangePassword() {
     setFormError(null);
     setLoading(true);
     try {
-      await sleep(600);
+      if (DEMO_MODE) await sleep(600);
+      else
+        await authApi.changePassword({ current_password: current.value, new_password: next.value });
       haptics.success();
       toast.success('Password updated');
       guard.allowLeave();
       router.back();
-    } catch {
+    } catch (e) {
       haptics.warning();
-      setFormError('We couldn’t update your password. Please try again.');
+      if (e instanceof ApiError && [400, 401, 403].includes(e.status)) {
+        current.setRemoteError(e.message); // almost always "current password is wrong"
+      } else {
+        setFormError(
+          e instanceof ApiError && e.message
+            ? e.message
+            : 'We couldn’t update your password. Please try again.'
+        );
+      }
       setLoading(false);
     }
   };

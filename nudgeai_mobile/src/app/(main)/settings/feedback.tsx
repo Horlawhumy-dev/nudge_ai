@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -14,7 +15,10 @@ import {
 } from '@/components/ui';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useField } from '@/hooks/useField';
+import { DEMO_MODE } from '@/constants/env';
 import { sleep } from '@/lib/format';
+import { accountApi } from '@/services/api/endpoints/account';
+import { ApiError } from '@/services/api/errors';
 import { haptics } from '@/lib/haptics';
 import { FEEDBACK_MIN, validateFeedback } from '@/lib/validation';
 import { toast } from '@/store/useToastStore';
@@ -47,14 +51,25 @@ export default function Feedback() {
     setFormError(null);
     setLoading(true);
     try {
-      await sleep(700);
+      if (DEMO_MODE) await sleep(700);
+      else {
+        await accountApi.sendFeedback({
+          category,
+          message: message.value.trim(),
+          appVersion: includeInfo ? (Constants.expoConfig?.version ?? undefined) : undefined,
+        });
+      }
       haptics.success();
       toast.success('Thanks! Your feedback helps shape Nudge.');
       guard.allowLeave();
       router.back();
-    } catch {
+    } catch (e) {
       haptics.warning();
-      setFormError('We couldn’t send your feedback. Please try again.');
+      setFormError(
+        e instanceof ApiError && e.message
+          ? e.message
+          : 'We couldn’t send your feedback. Please try again.'
+      );
       setLoading(false);
     }
   };
