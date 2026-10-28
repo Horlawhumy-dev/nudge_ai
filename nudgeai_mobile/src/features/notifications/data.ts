@@ -30,7 +30,7 @@ export function buildSeedNotifications(now: number = Date.now()): NudgeNotificat
       body: 'Drink Water is still open today. A quick check-in keeps your streak alive.',
       createdAt: now - 5 * HOUR,
       read: false,
-      href: '/habits',
+      href: '/streak',
     },
     {
       id: 'n4',
@@ -39,7 +39,7 @@ export function buildSeedNotifications(now: number = Date.now()): NudgeNotificat
       body: 'You complete most tasks before noon. Try scheduling your important work in the morning.',
       createdAt: now - 26 * HOUR,
       read: true,
-      href: '/progress',
+      href: '/report',
     },
     {
       id: 'n5',

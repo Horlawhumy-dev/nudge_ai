@@ -28,12 +28,19 @@ export function HomeHeader({ greeting, streak, unread }: HomeHeaderProps) {
           {greeting}
         </Text>
         {streak > 0 ? (
-          <View style={styles.streak}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${streak} day streak, view details`}
+            hitSlop={8}
+            onPress={() => router.push('/streak')}
+            style={styles.streak}
+          >
             <RNText style={styles.flame}>🔥</RNText>
             <Text variant="bodyLarge" color={colors.textSecondary}>
               {streak} days
             </Text>
-          </View>
+            <Icon name="chevron-forward" size={14} color={colors.textMuted} />
+          </Pressable>
         ) : null}
       </View>
       <Pressable

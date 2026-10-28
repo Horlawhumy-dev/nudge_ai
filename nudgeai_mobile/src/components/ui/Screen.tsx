@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { colors, gutter } from '@/theme';
 
 type ScreenProps = {
@@ -38,6 +38,7 @@ export function Screen({
   contentStyle,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardVisible();
   const padded = [
     styles.content,
     { paddingHorizontal: gutter, paddingBottom: bottomInset + (footer ? 0 : insets.bottom + 16) },
@@ -51,10 +52,8 @@ export function Screen({
         { backgroundColor: background, paddingTop: edgeToEdge ? 0 : insets.top + 8 },
       ]}
     >
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* 'padding' on both platforms: Android is edge-to-edge, so the window no longer resizes itself. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         {scroll ? (
           <ScrollView
             style={styles.flex}
@@ -68,7 +67,12 @@ export function Screen({
           <View style={[styles.flex, padded]}>{children}</View>
         )}
         {footer ? (
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View
+            style={[
+              styles.footer,
+              { paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom, 16) },
+            ]}
+          >
             {footer}
           </View>
         ) : null}

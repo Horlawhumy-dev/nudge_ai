@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
+import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import { EmptyState, Fab, Screen, ScreenHeader } from '@/components/ui';
 import { FilterBar } from '@/features/habits/components/FilterBar';
 import { StatPill } from '@/features/habits/components/StatPill';
@@ -53,7 +54,14 @@ export default function Tasks() {
       bottomInset={clearance + 40}
       contentStyle={styles.content}
       overlay={
-        <Fab accessibilityLabel="Add task" onPress={() => setSheet(true)} bottom={clearance - 8} />
+        <>
+          <Fab
+            accessibilityLabel="Add task"
+            onPress={() => setSheet(true)}
+            bottom={clearance - 8}
+          />
+          <AskNudgeButton bottom={clearance - 8} />
+        </>
       }
     >
       <ScreenHeader

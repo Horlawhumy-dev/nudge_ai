@@ -26,7 +26,7 @@ export default function NotificationsStep() {
       toast.show(
         'Reminders aren’t available in this environment. A development build supports them.'
       );
-      router.replace('/onboarding/ready');
+      router.replace('/onboarding/starter-habits');
       return;
     }
     setLoading(true);
@@ -34,12 +34,12 @@ export default function NotificationsStep() {
     setNotification('push', granted);
     setLoading(false);
     if (!granted) toast.show('You can turn notifications on later in Settings.');
-    router.replace('/onboarding/ready');
+    router.replace('/onboarding/starter-habits');
   };
 
   const skip = () => {
     setNotification('push', false);
-    router.replace('/onboarding/ready');
+    router.replace('/onboarding/starter-habits');
   };
 
   return (

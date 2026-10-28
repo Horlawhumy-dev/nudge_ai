@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
+import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import {
   AiOrb,
   ConfirmDialog,
@@ -40,6 +41,7 @@ export default function Profile() {
       background={colors.background}
       bottomInset={clearance}
       contentStyle={styles.content}
+      overlay={<AskNudgeButton bottom={clearance - 8} />}
     >
       <ScreenHeader
         title="My Profile"

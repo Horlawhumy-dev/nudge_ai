@@ -11,7 +11,6 @@ import { persistStorage } from './persist';
 
 type HabitsState = {
   habits: Habit[];
-  streak: number;
   addHabit: (draft: HabitDraft) => Habit;
   updateHabit: (id: string, patch: Partial<HabitDraft>) => void;
   /** Tick or untick a habit for `now`'s calendar day. Returns whether it is now done. */
@@ -29,7 +28,6 @@ export const useHabitsStore = create<HabitsState>()(
   persist(
     (set, get) => ({
       habits: [],
-      streak: 0,
 
       addHabit: (draft) => {
         const habit: Habit = {
@@ -93,16 +91,17 @@ export const useHabitsStore = create<HabitsState>()(
           return { habits: next };
         }),
 
-      seedDemo: () => set({ habits: buildSeedHabits(), streak: 7 }),
-      clear: () => set({ habits: [], streak: 0 }),
+      seedDemo: () => set({ habits: buildSeedHabits() }),
+      clear: () => set({ habits: [] }),
     }),
     {
       name: 'nudge.habits',
-      // v2 replaced completedToday/daysDone with dated completions; older saves are dropped.
-      version: 2,
-      migrate: () => ({ habits: [], streak: 0 }),
+      // v2 replaced completedToday/daysDone with dated completions; v3 dropped the stored streak
+      // (it's derived now). Older saves are dropped.
+      version: 3,
+      migrate: () => ({ habits: [] }),
       storage: persistStorage,
-      partialize: (s) => ({ habits: s.habits, streak: s.streak }),
+      partialize: (s) => ({ habits: s.habits }),
     }
   )
 );

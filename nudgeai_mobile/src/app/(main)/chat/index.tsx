@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
@@ -10,6 +10,7 @@ import { QuickPrompts } from '@/features/chat/components/QuickPrompts';
 import { TypingIndicator } from '@/features/chat/components/TypingIndicator';
 import { displayName, useAuthStore } from '@/store/useAuthStore';
 import { selectMessages, useChatStore } from '@/store/useChatStore';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { colors, fonts } from '@/theme';
 
 export default function Chat() {
@@ -21,10 +22,21 @@ export default function Chat() {
   const send = useChatStore((s) => s.send);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList>(null);
+  const keyboardVisible = useKeyboardVisible();
+  const { prompt } = useLocalSearchParams<{ prompt?: string }>();
+  const sentPrompt = useRef(false);
 
   useEffect(() => {
     if (messages.length > 0) listRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length, isReplying]);
+  }, [messages.length, isReplying, keyboardVisible]);
+
+  // Deep links (e.g. an insight card) can open the chat with a message already sent.
+  useEffect(() => {
+    if (!prompt || sentPrompt.current) return;
+    sentPrompt.current = true;
+    startNew();
+    void send(prompt);
+  }, [prompt, send, startNew]);
 
   const submit = () => {
     const text = draft;
@@ -77,6 +89,8 @@ export default function Chat() {
       ) : (
         <FlatList
           ref={listRef}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          keyboardDismissMode="interactive"
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => <MessageBubble message={item} />}

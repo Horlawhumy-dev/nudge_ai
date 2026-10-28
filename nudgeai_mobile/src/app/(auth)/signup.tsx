@@ -9,8 +9,10 @@ import {
   OrDivider,
   Screen,
   SocialButtons,
+  Text,
   TextField,
 } from '@/components/ui';
+import { colors } from '@/theme';
 import { AuthHeader } from '@/features/auth/components/AuthHeader';
 import { LinkText } from '@/features/auth/components/LinkText';
 import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
@@ -131,6 +133,21 @@ export default function SignUp() {
         style={styles.cta}
         testID="signup-submit"
       />
+      <Text variant="caption" color={colors.textMuted} align="center" style={styles.legal}>
+        By creating an account you agree to our{' '}
+        <Text variant="caption" color={colors.primary} onPress={() => router.push('/legal/terms')}>
+          Terms of Service
+        </Text>{' '}
+        and{' '}
+        <Text
+          variant="caption"
+          color={colors.primary}
+          onPress={() => router.push('/legal/privacy')}
+        >
+          Privacy Policy
+        </Text>
+        .
+      </Text>
       <View style={styles.switch}>
         <LinkText
           prefix="Already have an account?"
@@ -154,6 +171,7 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   fields: { gap: 20 },
   cta: { marginTop: 30 },
+  legal: { marginTop: 14 },
   switch: { marginTop: 16 },
   or: { marginVertical: 28 },
 });

@@ -6,7 +6,7 @@ import { Button, EmptyState, Screen, Text } from '@/components/ui';
 import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { allDoneToday, completedCount } from '@/features/habits/utils';
-import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
+import { AskNudgeBar, ASK_BAR_HEIGHT } from '@/features/home/components/AskNudgeBar';
 import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ListSection } from '@/features/home/components/ListSection';
 import { NudgeBanner } from '@/features/home/components/NudgeBanner';
@@ -18,6 +18,7 @@ import { unreadCount } from '@/features/notifications/utils';
 import { useNow } from '@/hooks/useNow';
 import { greeting } from '@/lib/format';
 import { displayName, useAuthStore } from '@/store/useAuthStore';
+import { overallStreak } from '@/features/habits/streak';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { useNotificationsStore } from '@/store/useNotificationsStore';
 import { useTasksStore } from '@/store/useTasksStore';
@@ -27,7 +28,7 @@ export default function Home() {
   const clearance = useTabBarClearance();
   const name = useAuthStore((s) => displayName(s.user));
   const habits = useHabitsStore((s) => s.habits);
-  const streak = useHabitsStore((s) => s.streak);
+  const streak = overallStreak(habits);
   const tasks = useTasksStore((s) => s.tasks);
   const unread = useNotificationsStore((s) => unreadCount(s.items));
   const [habitSheet, setHabitSheet] = useState(false);
@@ -48,9 +49,9 @@ export default function Home() {
     <Screen
       scroll
       background={colors.background}
-      bottomInset={clearance}
+      bottomInset={clearance + ASK_BAR_HEIGHT + 8}
       contentStyle={styles.content}
-      overlay={<AskNudgeButton bottom={clearance - 8} expanded={isEmpty} />}
+      overlay={<AskNudgeBar bottom={clearance - 8} />}
     >
       <HomeHeader greeting={greeting(name, now)} streak={streak} unread={unread} />
 

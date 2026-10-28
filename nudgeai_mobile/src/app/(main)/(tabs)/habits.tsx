@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
+import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import { EmptyState, Fab, Screen, ScreenHeader } from '@/components/ui';
 import { HABIT_FILTERS, type HabitFilter } from '@/features/habits/constants';
 import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { FilterBar } from '@/features/habits/components/FilterBar';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { StatPill } from '@/features/habits/components/StatPill';
+import { overallStreak } from '@/features/habits/streak';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { colors } from '@/theme';
 
@@ -16,7 +18,7 @@ export default function Habits() {
   const router = useRouter();
   const clearance = useTabBarClearance();
   const habits = useHabitsStore((s) => s.habits);
-  const streak = useHabitsStore((s) => s.streak);
+  const streak = overallStreak(habits);
   const [filter, setFilter] = useState<HabitFilter>('All');
   const [sheet, setSheet] = useState(false);
 
@@ -29,18 +31,27 @@ export default function Habits() {
       bottomInset={clearance + 40}
       contentStyle={styles.content}
       overlay={
-        <Fab
-          accessibilityLabel="Create habit"
-          onPress={() => setSheet(true)}
-          bottom={clearance - 8}
-        />
+        <>
+          <Fab
+            accessibilityLabel="Create habit"
+            onPress={() => setSheet(true)}
+            bottom={clearance - 8}
+          />
+          <AskNudgeButton bottom={clearance - 8} />
+        </>
       }
     >
       <ScreenHeader
         title="My Habits"
         subtitle="Building consistency"
         onBack={() => router.navigate('/home')}
-        right={<StatPill emoji="🔥" label={`${streak} days streak`} />}
+        right={
+          <StatPill
+            emoji="🔥"
+            label={`${streak} days streak`}
+            onPress={() => router.push('/streak')}
+          />
+        }
       />
       <FilterBar filters={HABIT_FILTERS} value={filter} onChange={setFilter} />
       {visible.length > 0 ? (

@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AiOrb, GradientCard, Icon, Text } from '@/components/ui';
 import { colors, fonts } from '@/theme';
@@ -9,22 +10,30 @@ type NudgeBannerProps = {
 
 /** The AI's current nudge, shown at the top of Home. */
 export function NudgeBanner({ message }: NudgeBannerProps) {
+  const router = useRouter();
   return (
-    <GradientCard style={styles.card}>
-      <AiOrb size={46} framed />
-      <View style={styles.texts}>
-        <Text variant="heading" style={styles.title}>
-          Nudge AI
-        </Text>
-        <Text variant="bodyLarge" color="rgba(255,255,255,0.85)">
-          {message}
-        </Text>
-      </View>
-      <View style={styles.sparkles} pointerEvents="none">
-        <Icon name="sparkles" size={34} color="rgba(255,255,255,0.55)" />
-        <Icon name="sparkles" size={16} color="rgba(255,255,255,0.4)" />
-      </View>
-    </GradientCard>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open Nudge AI"
+      onPress={() => router.push('/chat')}
+      style={({ pressed }) => pressed && { opacity: 0.94 }}
+    >
+      <GradientCard style={styles.card}>
+        <AiOrb size={46} framed />
+        <View style={styles.texts}>
+          <Text variant="heading" style={styles.title}>
+            Nudge AI
+          </Text>
+          <Text variant="bodyLarge" color="rgba(255,255,255,0.85)">
+            {message}
+          </Text>
+        </View>
+        <View style={styles.sparkles} pointerEvents="none">
+          <Icon name="sparkles" size={34} color="rgba(255,255,255,0.55)" />
+          <Icon name="sparkles" size={16} color="rgba(255,255,255,0.4)" />
+        </View>
+      </GradientCard>
+    </Pressable>
   );
 }
 

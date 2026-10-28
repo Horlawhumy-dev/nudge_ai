@@ -9,5 +9,5 @@ export type NudgeNotification = {
   createdAt: number;
   read: boolean;
   /** Where tapping the item goes. */
-  href?: '/habits' | '/tasks' | '/progress' | '/chat' | '/home';
+  href?: '/habits' | '/tasks' | '/progress' | '/chat' | '/home' | '/report' | '/streak';
 };

@@ -1,16 +1,17 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 
-import { AiOrb, Text } from '@/components/ui';
+import { AiOrb } from '@/components/ui';
 import { colors, shadows } from '@/theme';
 
 type AskNudgeButtonProps = {
   bottom: number;
-  /** Pill with a label (empty state) vs. just the orb. */
-  expanded?: boolean;
+  /** Which edge to sit on; the other tabs keep the right edge for their "+" button. */
+  side?: 'left' | 'right';
 };
 
-export function AskNudgeButton({ bottom, expanded = false }: AskNudgeButtonProps) {
+/** Round Nudge AI shortcut shown on the tabs that don't have the Home "ask" bar. */
+export function AskNudgeButton({ bottom, side = 'left' }: AskNudgeButtonProps) {
   const router = useRouter();
 
   return (
@@ -18,15 +19,9 @@ export function AskNudgeButton({ bottom, expanded = false }: AskNudgeButtonProps
       accessibilityRole="button"
       accessibilityLabel="Ask Nudge AI"
       onPress={() => router.push('/chat')}
-      style={({ pressed }) => [
-        styles.base,
-        expanded ? styles.pill : styles.round,
-        { bottom },
-        pressed && { opacity: 0.85 },
-      ]}
+      style={({ pressed }) => [styles.base, { bottom, [side]: 20 }, pressed && { opacity: 0.85 }]}
     >
-      <AiOrb size={expanded ? 48 : 40} framed={false} />
-      {expanded ? <Text variant="subheading">Ask Nudge AI</Text> : null}
+      <AiOrb size={40} />
     </Pressable>
   );
 }
@@ -34,14 +29,14 @@ export function AskNudgeButton({ bottom, expanded = false }: AskNudgeButtonProps
 const styles = StyleSheet.create({
   base: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
     borderColor: colors.borderSoft,
     alignItems: 'center',
-    flexDirection: 'row',
+    justifyContent: 'center',
     ...shadows.card,
   },
-  round: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center' },
-  pill: { height: 64, borderRadius: 32, paddingLeft: 10, paddingRight: 24, gap: 14 },
 });

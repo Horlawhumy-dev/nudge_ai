@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text as RNText, View } from 'react-native';
+import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { useTabBarClearance } from '@/components/layout/useTabBarClearance';
+import { AskNudgeButton } from '@/features/home/components/AskNudgeButton';
 import { Card, Icon, Screen, ScreenHeader, Text, UnderlineTabs } from '@/components/ui';
 import { BarChart } from '@/features/progress/components/BarChart';
 import { ConsistencyMap } from '@/features/progress/components/ConsistencyMap';
@@ -51,12 +52,22 @@ export default function Progress() {
       background={colors.background}
       bottomInset={clearance}
       contentStyle={styles.content}
+      overlay={<AskNudgeButton bottom={clearance - 8} />}
     >
       <ScreenHeader
         title="Progress"
         subtitle="Track your journey here"
         onBack={() => router.navigate('/home')}
-        right={<Icon name="options-outline" size={26} />}
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Weekly report"
+            hitSlop={10}
+            onPress={() => router.push('/report')}
+          >
+            <Icon name="document-text-outline" size={26} />
+          </Pressable>
+        }
       />
       <UnderlineTabs tabs={TABS} value={tab} onChange={setTab} />
 
@@ -88,7 +99,10 @@ export default function Progress() {
             </Text>
             <BarChart data={habitBars[period]} />
           </Card>
-          <InsightCard message={habitInsight} />
+          <InsightCard
+            message={habitInsight}
+            prompt="Tell me more about my habit insights and how to improve."
+          />
           <Card padding={14} radiusSize="xl" style={styles.list}>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.listTitle}>
               Top performing habits
@@ -148,7 +162,10 @@ export default function Progress() {
               />
             ))}
           </Card>
-          <InsightCard message={taskInsight} />
+          <InsightCard
+            message={taskInsight}
+            prompt="Tell me more about my task insights and how to plan my day."
+          />
           <Card padding={14} radiusSize="xl" style={styles.list}>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.listTitle}>
               Most overdue tasks

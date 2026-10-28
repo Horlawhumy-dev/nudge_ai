@@ -30,6 +30,38 @@ export default function Settings() {
         />
       </SectionCard>
 
+      <SectionCard title="Nudge AI">
+        <ListRow
+          title="Talk to Nudge"
+          subtitle="Voice mode: just say what you need"
+          icon="mic-outline"
+          onPress={() => router.push('/chat/voice')}
+        />
+        <ListRow
+          title="Chat with Nudge AI"
+          subtitle="Ask, plan and reschedule by text"
+          icon="chatbubble-ellipses-outline"
+          onPress={() => router.push('/chat')}
+        />
+        <ListRow
+          title="AI voice & tone"
+          subtitle="Choose how your reminders sound"
+          icon="color-wand-outline"
+          onPress={() => router.push('/settings/ai-voice')}
+        />
+        <ListRow
+          title="Chat history"
+          icon="time-outline"
+          onPress={() => router.push('/chat/history')}
+        />
+        <ListRow
+          title="Weekly report"
+          subtitle="Your week, summarised"
+          icon="stats-chart-outline"
+          onPress={() => router.push('/report')}
+        />
+      </SectionCard>
+
       <SectionCard title="Habits & tasks">
         <ListRow
           title="Wake up time"

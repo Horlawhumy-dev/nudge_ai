@@ -1,4 +1,4 @@
-import { StyleSheet, Text as RNText, View } from 'react-native';
+import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { colors, radius } from '@/theme';
@@ -6,17 +6,25 @@ import { colors, radius } from '@/theme';
 type StatPillProps = {
   emoji: string;
   label: string;
+  /** Makes the pill a button (e.g. open the streak screen). */
+  onPress?: () => void;
 };
 
 /** Small grey capsule in a screen header: "🔥 7 days streak", "😒 2/5". */
-export function StatPill({ emoji, label }: StatPillProps) {
+export function StatPill({ emoji, label, onPress }: StatPillProps) {
+  const Wrapper = onPress ? Pressable : View;
   return (
-    <View style={styles.pill}>
+    <Wrapper
+      style={styles.pill}
+      {...(onPress
+        ? { onPress, accessibilityRole: 'button' as const, accessibilityLabel: label }
+        : {})}
+    >
       <RNText style={styles.emoji}>{emoji}</RNText>
       <Text variant="body" color={colors.textSecondary} style={styles.label}>
         {label}
       </Text>
-    </View>
+    </Wrapper>
   );
 }
 

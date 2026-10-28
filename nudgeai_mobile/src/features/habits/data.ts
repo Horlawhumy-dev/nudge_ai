@@ -2,7 +2,10 @@ import { addDays, dateKey } from '@/lib/date';
 
 import type { Habit } from './types';
 
-/** Seeds mirror the design cards: two ticked today, two open, with varied recent history. */
+/**
+ * Seeds mirror the design cards (two ticked today, two open). Together their history covers the last
+ * seven days, giving the demo account a real 7-day streak.
+ */
 export function buildSeedHabits(now: Date = new Date()): Habit[] {
   const ago = (n: number) => dateKey(addDays(now, -n));
   return [
@@ -37,7 +40,7 @@ export function buildSeedHabits(now: Date = new Date()): Habit[] {
       frequency: 'Daily',
       goalDays: 7,
       accentIndex: 2,
-      completions: [ago(1)],
+      completions: [ago(1), ago(3), ago(4)],
     },
     {
       id: 'habit_fruits',
@@ -48,7 +51,7 @@ export function buildSeedHabits(now: Date = new Date()): Habit[] {
       frequency: 'Daily',
       goalDays: 6,
       accentIndex: 3,
-      completions: [ago(2)],
+      completions: [ago(2), ago(5), ago(6)],
     },
   ];
 }

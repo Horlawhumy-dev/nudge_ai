@@ -53,14 +53,17 @@ src/app/                    expo-router routes only — thin screens that compos
   index.tsx                   splash, then routes by session status
   intro.tsx                   3-slide intro
   (auth)/                     login, signup, verify, verified, forgot/new password, reset success
-  onboarding/                 step-1 … step-5, notifications (permission pre-prompt), ready
+  onboarding/                 step-1 … step-5, notifications (permission), starter-habits, ready
+  legal/                      terms, privacy
   (main)/                     guarded by session status (redirects to / when signed out)
     (tabs)/                     home, habits, tasks, progress, profile (floating tab bar)
     habit/[id].tsx              habit detail (streak, week strip, edit, delete)
+    streak.tsx                  overall streak, best, milestones
+    report.tsx                  weekly report derived from habits and tasks
     notifications.tsx           inbox behind the bell
     chat/                       index, history (open / new / delete), voice
     settings/                   index, notifications, ai-voice, quiet-hours, wake/sleep time,
-                                edit-profile, subscription, privacy, change-password, help, feedback
+                                edit-profile, subscription, privacy, change-password, help, feedback, about
 src/components/ui/          design-system primitives (Button, TextField, Chip, BottomSheet, …)
 src/components/layout/      floating tab bar + clearance hook
 src/features/<name>/        per-feature types, seed data, pure utils and feature components
@@ -100,6 +103,12 @@ Notes on deviations from the design set:
 - A picked profile photo is stored as a local URI; it falls back to the default avatar if the file is gone.
 - Free-plan limits (3 habits, 5 tasks) are shown on the subscription screen but not enforced; the demo
   data itself exceeds them.
+
+## Where the AI lives
+
+Nudge AI is reachable from every tab: Home has a docked "Ask Nudge anything" bar with a mic button (voice mode),
+the other tabs have a round Nudge button, the Home banner and Progress insight cards open it (insights pre-send a
+question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
 
 ## Native-only behaviour to check on a device
 
