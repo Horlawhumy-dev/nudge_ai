@@ -261,6 +261,30 @@ async def test_onboarding_patch_changes_only_what_was_sent(
     assert bad.status_code == 422
 
 
+async def test_onboarding_can_be_read_before_and_after_setup(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """The app reads this right after login to choose between setup and Home."""
+    fresh = await client.get(f"{API}/onboarding", headers=auth_headers)
+    assert fresh.status_code == 200, fresh.text
+    assert fresh.json()["completed"] is False
+    assert fresh.json()["wake_time"] is None
+
+    await client.patch(
+        f"{API}/onboarding",
+        json={"wake_time": "06:30", "goals": ["fitness"], "completed": True},
+        headers=auth_headers,
+    )
+    done = (await client.get(f"{API}/onboarding", headers=auth_headers)).json()
+    assert done["completed"] is True
+    assert done["wake_time"] == "06:30" and done["goals"] == ["fitness"]
+    assert done["name"]  # the account's name rides along
+
+
+async def test_onboarding_read_requires_sign_in(client: AsyncClient) -> None:
+    assert (await client.get(f"{API}/onboarding")).status_code == 401
+
+
 async def test_onboarding_tone_becomes_the_live_tone_setting(
     client: AsyncClient, auth_headers: Headers
 ) -> None:

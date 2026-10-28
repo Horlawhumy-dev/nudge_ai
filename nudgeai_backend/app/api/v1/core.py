@@ -168,6 +168,17 @@ def _sync_tone(user: CurrentUser, style: str | None) -> None:
         user.preferences.reminder_tone = style
 
 
+@router.get("/onboarding", response_model=OnboardingResponse)
+async def get_onboarding(user: CurrentUser, session: SessionDep) -> OnboardingResponse:
+    """The setup answers, and whether setup is finished (the app picks setup or Home from it)."""
+    profile = await _onboarding(user, session)
+    # A brand-new account has no profile row yet; saving it applies the column defaults
+    # (completed=false) so the response is complete.
+    await session.commit()
+    await session.refresh(profile)
+    return _onboarding_out(profile, user)
+
+
 @router.put("/onboarding", response_model=OnboardingResponse)
 async def put_onboarding(
     payload: OnboardingRequest, user: CurrentUser, session: SessionDep

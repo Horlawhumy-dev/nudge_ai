@@ -20,7 +20,7 @@ Base URL: `http://<host>:8079/api/v1` (set `EXPO_PUBLIC_API_URL`). Interactive d
 1. `POST /auth/signup {email, password, name, timezone}` → 201 user. A **4-digit code** is emailed.
 2. `POST /auth/verify-email {email, code}` → **tokens** (no separate login needed). Wrong code → 400, five wrong → 429.
 3. `POST /devices {token, platform}` with the Expo push token (idempotent; call on every launch).
-4. Onboarding: `PATCH /onboarding {name, wake_time, sleep_time, goals, nudge_style, completed}`. Send `nudge_style` as the tone id (`gentle` | `firm` | `mix`); it also becomes the live tone setting. Map the quiz buckets to times, e.g. wake `7-8` → `07:30`, sleep `1030-12` → `23:15`.
+4. Onboarding: read it with `GET /onboarding` (`completed` decides setup vs. Home after login), save with `PATCH /onboarding {name, wake_time, sleep_time, goals, nudge_style, completed}`. Send `nudge_style` as the tone id (`gentle` | `firm` | `mix`); it also becomes the live tone setting. Map the quiz buckets to times, e.g. wake `7-8` → `07:30`, sleep `1030-12` → `23:15`.
 5. Starter habits: `POST /habits` for each (mobile picks them; Free allows 3).
 
 Password rule (same on both sides): 8+ chars, a capital, a number, a special character.
