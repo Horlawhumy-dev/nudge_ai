@@ -1,12 +1,14 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Icon, Screen, ScreenHeader, Text, TextField } from '@/components/ui';
 import { UserAvatar } from '@/features/auth/components/UserAvatar';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useField } from '@/hooks/useField';
 import { haptics } from '@/lib/haptics';
-import { isValidEmail } from '@/lib/validation';
+import { validateEmail, validateFullName } from '@/lib/validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
@@ -15,18 +17,24 @@ export default function EditProfile() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const updateProfile = useAuthStore((s) => s.updateProfile);
-  const [name, setName] = useState(user?.name ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
+  const name = useField(user?.name ?? '', validateFullName);
+  const email = useField(user?.email ?? '', validateEmail);
+  const emailRef = useRef<TextInput>(null);
 
-  const emailValid = isValidEmail(email);
-  const dirty = name.trim() !== user?.name || email.trim() !== user?.email;
-  const canSave = dirty && name.trim().length > 1 && emailValid;
+  const dirty = name.value.trim() !== user?.name || email.value.trim() !== user?.email;
+  const canSave = dirty && name.valid && email.valid;
+  const guard = useDiscardGuard(dirty);
 
   const save = () => {
-    if (!canSave) return;
-    updateProfile({ name: name.trim(), email: email.trim() });
+    if (!canSave) {
+      name.touch();
+      email.touch();
+      return;
+    }
+    updateProfile({ name: name.value.trim().replace(/\s+/g, ' '), email: email.value.trim() });
     haptics.success();
     toast.success('Profile updated');
+    guard.allowLeave();
     router.back();
   };
 
@@ -78,18 +86,22 @@ export default function EditProfile() {
       </Pressable>
       <TextField
         label="Full name"
-        value={name}
-        onChangeText={setName}
+        {...name.props}
         autoCapitalize="words"
+        autoComplete="name"
         returnKeyType="next"
+        onSubmitEditing={() => emailRef.current?.focus()}
+        blurOnSubmit={false}
+        maxLength={50}
       />
       <TextField
         label="Email address"
-        value={email}
-        onChangeText={setEmail}
+        {...email.props}
         keyboardType="email-address"
         autoCapitalize="none"
-        error={email && !emailValid ? 'Enter a valid email address' : undefined}
+        autoComplete="email"
+        inputRef={emailRef}
+        returnKeyType="done"
         onSubmitEditing={save}
       />
       <Pressable
@@ -102,6 +114,7 @@ export default function EditProfile() {
           Change password
         </Text>
       </Pressable>
+      {guard.dialog}
     </Screen>
   );
 }

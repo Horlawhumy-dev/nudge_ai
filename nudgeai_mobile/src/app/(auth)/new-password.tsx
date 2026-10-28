@@ -1,28 +1,43 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
 
-import { BackButton, Button, Screen, Text, TextField } from '@/components/ui';
+import { BackButton, Button, FormError, Screen, Text, TextField } from '@/components/ui';
 import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
-import { isStrongPassword } from '@/lib/validation';
+import { useField } from '@/hooks/useField';
+import { haptics } from '@/lib/haptics';
+import { validateConfirmPassword, validateNewPassword } from '@/lib/validation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { colors } from '@/theme';
 
 export default function NewPassword() {
   const router = useRouter();
   const resetPassword = useAuthStore((s) => s.resetPassword);
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const password = useField('', validateNewPassword);
+  const confirm = useField('', (v) => validateConfirmPassword(password.value, v));
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const confirmRef = useRef<TextInput>(null);
 
-  const mismatch = confirm.length > 0 && confirm !== password;
-  const canSubmit = isStrongPassword(password) && confirm === password;
+  const canSubmit = password.valid && confirm.valid;
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || loading) {
+      password.touch();
+      confirm.touch();
+      return;
+    }
+    setFormError(null);
     setLoading(true);
-    await resetPassword(password);
-    router.replace('/password-reset');
+    try {
+      await resetPassword(password.value);
+      haptics.success();
+      router.replace('/password-reset');
+    } catch {
+      haptics.warning();
+      setFormError('We couldn’t update your password. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,32 +50,38 @@ export default function NewPassword() {
         </Text>
       </View>
       <View style={styles.fields}>
+        <FormError message={formError} />
         <View>
           <TextField
             label="Password"
             placeholder="Enter password"
-            value={password}
-            onChangeText={setPassword}
+            value={password.value}
+            onChangeText={password.setValue}
+            onBlur={password.touch}
             secure
             autoCapitalize="none"
             textContentType="newPassword"
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+            blurOnSubmit={false}
           />
-          <PasswordChecklist password={password} />
+          <PasswordChecklist password={password.value} showErrors={password.touched} />
         </View>
         <TextField
           label="Confirm password"
           placeholder="Confirm password"
-          value={confirm}
-          onChangeText={setConfirm}
+          {...confirm.props}
           secure
           autoCapitalize="none"
           textContentType="newPassword"
-          error={mismatch ? 'Passwords don’t match' : undefined}
+          inputRef={confirmRef}
+          returnKeyType="go"
+          onSubmitEditing={() => void submit()}
         />
       </View>
       <Button
         label="Reset password"
-        onPress={submit}
+        onPress={() => void submit()}
         disabled={!canSubmit}
         loading={loading}
         style={styles.cta}

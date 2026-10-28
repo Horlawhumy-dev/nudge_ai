@@ -2,66 +2,100 @@ import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
-import { Button, OrDivider, Screen, SocialButtons, TextField } from '@/components/ui';
+import {
+  BackButton,
+  Button,
+  FormError,
+  OrDivider,
+  Screen,
+  SocialButtons,
+  TextField,
+} from '@/components/ui';
 import { AuthHeader } from '@/features/auth/components/AuthHeader';
-import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
 import { LinkText } from '@/features/auth/components/LinkText';
-import { isStrongPassword, isValidEmail } from '@/lib/validation';
-import { useAuthStore } from '@/store/useAuthStore';
+import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
+import { useField } from '@/hooks/useField';
+import { haptics } from '@/lib/haptics';
+import { validateEmail, validateFullName, validateNewPassword } from '@/lib/validation';
+import { AuthError, useAuthStore } from '@/store/useAuthStore';
+import { toast } from '@/store/useToastStore';
 
 export default function SignUp() {
   const router = useRouter();
   const signUp = useAuthStore((s) => s.signUp);
   const signIn = useAuthStore((s) => s.signIn);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [touched, setTouched] = useState({ email: false });
+  const name = useField('', validateFullName);
+  const email = useField('', validateEmail);
+  const password = useField('', validateNewPassword);
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
-  const emailValid = isValidEmail(email);
-  const passwordValid = isStrongPassword(password);
-  const canSubmit = name.trim().length > 1 && emailValid && passwordValid;
+  const canSubmit = name.valid && email.valid && password.valid;
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || loading) {
+      name.touch();
+      email.touch();
+      password.touch();
+      return;
+    }
+    setFormError(null);
     setLoading(true);
-    await signUp(name, email, password);
-    router.push('/verify');
-    setLoading(false);
+    try {
+      await signUp(name.value, email.value, password.value);
+      haptics.success();
+      toast.success(`Account created. We sent a code to ${email.value.trim()}.`);
+      router.push('/verify');
+    } catch (e) {
+      haptics.warning();
+      if (e instanceof AuthError && e.field === 'email') {
+        email.setRemoteError(e.message);
+        emailRef.current?.focus();
+      } else {
+        setFormError(
+          e instanceof AuthError ? e.message : 'Something went wrong. Please try again.'
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const social = async () => {
     setLoading(true);
-    await signIn('', '');
-    router.replace('/home');
+    try {
+      await signIn('', '');
+      router.replace('/home');
+    } catch {
+      setFormError('Something went wrong. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
     <Screen scroll>
+      <BackButton onPress={() => router.replace('/intro')} />
       <AuthHeader title="Create Account" subtitle="Start building better habits today!" />
       <View style={styles.fields}>
+        <FormError message={formError} />
         <TextField
           label="Full name"
           placeholder="Enter full name"
-          value={name}
-          onChangeText={setName}
+          {...name.props}
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
           returnKeyType="next"
           onSubmitEditing={() => emailRef.current?.focus()}
           blurOnSubmit={false}
+          maxLength={50}
         />
         <TextField
           label="Email address"
           placeholder="Enter email address"
-          value={email}
-          onChangeText={setEmail}
-          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-          error={touched.email && email && !emailValid ? 'Enter a valid email address' : undefined}
+          {...email.props}
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
@@ -75,22 +109,23 @@ export default function SignUp() {
           <TextField
             label="Password"
             placeholder="Create password"
-            value={password}
-            onChangeText={setPassword}
+            value={password.value}
+            onChangeText={password.setValue}
+            onBlur={password.touch}
             secure
             autoCapitalize="none"
             autoComplete="new-password"
             textContentType="newPassword"
             inputRef={passwordRef}
             returnKeyType="go"
-            onSubmitEditing={submit}
+            onSubmitEditing={() => void submit()}
           />
-          <PasswordChecklist password={password} />
+          <PasswordChecklist password={password.value} showErrors={password.touched} />
         </View>
       </View>
       <Button
         label="Create account"
-        onPress={submit}
+        onPress={() => void submit()}
         disabled={!canSubmit}
         loading={loading}
         style={styles.cta}
@@ -106,7 +141,12 @@ export default function SignUp() {
       <View style={styles.or}>
         <OrDivider />
       </View>
-      <SocialButtons verb="Sign Up" onGoogle={social} onApple={social} />
+      <SocialButtons
+        verb="Sign Up"
+        onGoogle={() => void social()}
+        onApple={() => void social()}
+        disabled={loading}
+      />
     </Screen>
   );
 }

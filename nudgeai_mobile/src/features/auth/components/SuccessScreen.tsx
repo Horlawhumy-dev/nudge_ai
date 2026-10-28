@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { BackHandler, StyleSheet, View } from 'react-native';
 
 import { Button, Screen, Text } from '@/components/ui';
 import { colors } from '@/theme';
@@ -13,6 +14,12 @@ type SuccessScreenProps = {
 
 /** Confetti + badge confirmation used for "verified", "password reset" and "ready". */
 export function SuccessScreen({ title, message, actionLabel, onAction }: SuccessScreenProps) {
+  // A finished flow shouldn't be re-enterable with Back; the action button is the way forward.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
+
   return (
     <Screen edgeToEdge>
       <Image

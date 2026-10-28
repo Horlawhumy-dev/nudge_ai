@@ -1,34 +1,59 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
 
-import { Button, Screen, ScreenHeader, TextField } from '@/components/ui';
+import { Button, FormError, Screen, ScreenHeader, TextField } from '@/components/ui';
 import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
-import { haptics } from '@/lib/haptics';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useField } from '@/hooks/useField';
 import { sleep } from '@/lib/format';
-import { isStrongPassword } from '@/lib/validation';
+import { haptics } from '@/lib/haptics';
+import {
+  validateConfirmPassword,
+  validateNewPassword,
+  validatePasswordPresent,
+} from '@/lib/validation';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
 export default function ChangePassword() {
   const router = useRouter();
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const current = useField('', validatePasswordPresent);
+  const next = useField('', (v) => {
+    const problem = validateNewPassword(v);
+    if (problem) return problem;
+    return v === current.value ? 'Choose a password you haven’t used here before.' : null;
+  });
+  const confirm = useField('', (v) => validateConfirmPassword(next.value, v));
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const nextRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
-  const mismatch = confirm.length > 0 && confirm !== next;
-  const same = next.length > 0 && next === current;
-  const canSubmit = current.length > 0 && isStrongPassword(next) && confirm === next && !same;
+  const canSubmit = current.valid && next.valid && confirm.valid;
+  const dirty = current.value + next.value + confirm.value !== '';
+  const guard = useDiscardGuard(dirty && !loading);
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || loading) {
+      current.touch();
+      next.touch();
+      confirm.touch();
+      return;
+    }
+    setFormError(null);
     setLoading(true);
-    await sleep(600);
-    setLoading(false);
-    haptics.success();
-    toast.success('Password updated');
-    router.back();
+    try {
+      await sleep(600);
+      haptics.success();
+      toast.success('Password updated');
+      guard.allowLeave();
+      router.back();
+    } catch {
+      haptics.warning();
+      setFormError('We couldn’t update your password. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,7 +62,12 @@ export default function ChangePassword() {
       background={colors.background}
       contentStyle={styles.content}
       footer={
-        <Button label="Update password" onPress={submit} disabled={!canSubmit} loading={loading} />
+        <Button
+          label="Update password"
+          onPress={() => void submit()}
+          disabled={!canSubmit}
+          loading={loading}
+        />
       }
     >
       <ScreenHeader
@@ -45,40 +75,52 @@ export default function ChangePassword() {
         subtitle="Use a strong password you don’t use elsewhere."
       />
       <View style={styles.fields}>
+        <FormError message={formError} />
         <TextField
           label="Current password"
           placeholder="Enter current password"
-          value={current}
-          onChangeText={setCurrent}
+          {...current.props}
+          success={false}
           secure
           autoCapitalize="none"
           textContentType="password"
+          returnKeyType="next"
+          onSubmitEditing={() => nextRef.current?.focus()}
+          blurOnSubmit={false}
         />
         <View>
           <TextField
             label="New password"
             placeholder="Enter new password"
-            value={next}
-            onChangeText={setNext}
+            value={next.value}
+            onChangeText={next.setValue}
+            onBlur={next.touch}
+            error={
+              next.touched && next.error && next.error.startsWith('Choose') ? next.error : undefined
+            }
             secure
             autoCapitalize="none"
             textContentType="newPassword"
-            error={same ? 'New password must be different from the current one' : undefined}
+            inputRef={nextRef}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+            blurOnSubmit={false}
           />
-          <PasswordChecklist password={next} />
+          <PasswordChecklist password={next.value} showErrors={next.touched} />
         </View>
         <TextField
           label="Confirm new password"
           placeholder="Confirm new password"
-          value={confirm}
-          onChangeText={setConfirm}
+          {...confirm.props}
           secure
           autoCapitalize="none"
           textContentType="newPassword"
-          error={mismatch ? 'Passwords don’t match' : undefined}
-          onSubmitEditing={submit}
+          inputRef={confirmRef}
+          returnKeyType="go"
+          onSubmitEditing={() => void submit()}
         />
       </View>
+      {guard.dialog}
     </Screen>
   );
 }

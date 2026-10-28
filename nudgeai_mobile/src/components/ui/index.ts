@@ -35,3 +35,4 @@ export type { SheetAction } from './ActionSheet';
 export { ToastHost } from './ToastHost';
 export { CalendarPicker } from './CalendarPicker';
 export { DateField } from './DateField';
+export { FormError } from './FormError';

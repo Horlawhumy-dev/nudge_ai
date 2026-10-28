@@ -32,7 +32,8 @@ function ToastView({ toast }: { toast: Toast }) {
       style={[
         styles.wrap,
         {
-          top: insets.top + 8,
+          // Sits below the 56pt header row so it never covers a back button or header action.
+          top: insets.top + 64,
           opacity: progress,
           transform: [
             { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) },

@@ -10,10 +10,18 @@ type OtpInputProps = {
   value: string;
   onChange: (value: string) => void;
   autoFocus?: boolean;
+  /** Red cells for a wrong code. */
+  error?: boolean;
 };
 
 /** One hidden input drives N visual cells, so paste and autofill work. */
-export function OtpInput({ length = 4, value, onChange, autoFocus = true }: OtpInputProps) {
+export function OtpInput({
+  length = 4,
+  value,
+  onChange,
+  autoFocus = true,
+  error = false,
+}: OtpInputProps) {
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const active = Math.min(value.length, length - 1);
@@ -33,9 +41,14 @@ export function OtpInput({ length = 4, value, onChange, autoFocus = true }: OtpI
                   borderColor: colors.primaryTint,
                   backgroundColor: colors.primarySoft,
                 },
+                error && { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
               ]}
             >
-              <Text variant="title" color={colors.primary} style={styles.digit}>
+              <Text
+                variant="title"
+                color={error ? colors.danger : colors.primary}
+                style={styles.digit}
+              >
                 {value[i] ?? (isActive ? '|' : '')}
               </Text>
             </View>

@@ -2,9 +2,21 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Chip, Screen, ScreenHeader, Text, TextField, Toggle } from '@/components/ui';
+import {
+  Button,
+  Chip,
+  FormError,
+  Screen,
+  ScreenHeader,
+  Text,
+  TextField,
+  Toggle,
+} from '@/components/ui';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useField } from '@/hooks/useField';
 import { sleep } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
+import { FEEDBACK_MIN, validateFeedback } from '@/lib/validation';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
 
@@ -15,26 +27,36 @@ const CATEGORIES = [
   { id: 'other', label: 'Other', emoji: '💬' },
 ] as const;
 
-const MIN_LENGTH = 10;
 const MAX_LENGTH = 500;
 
 export default function Feedback() {
   const router = useRouter();
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]['id']>('idea');
-  const [message, setMessage] = useState('');
+  const message = useField('', (v) => validateFeedback(v, FEEDBACK_MIN));
   const [includeInfo, setIncludeInfo] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = message.trim().length >= MIN_LENGTH;
+  const guard = useDiscardGuard(message.value.trim().length > 0 && !loading);
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!message.valid || loading) {
+      message.touch();
+      return;
+    }
+    setFormError(null);
     setLoading(true);
-    await sleep(700);
-    setLoading(false);
-    haptics.success();
-    toast.success('Thanks! Your feedback helps shape Nudge.');
-    router.back();
+    try {
+      await sleep(700);
+      haptics.success();
+      toast.success('Thanks! Your feedback helps shape Nudge.');
+      guard.allowLeave();
+      router.back();
+    } catch {
+      haptics.warning();
+      setFormError('We couldn’t send your feedback. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -43,10 +65,16 @@ export default function Feedback() {
       background={colors.background}
       contentStyle={styles.content}
       footer={
-        <Button label="Send feedback" onPress={submit} disabled={!canSubmit} loading={loading} />
+        <Button
+          label="Send feedback"
+          onPress={() => void submit()}
+          disabled={!message.valid}
+          loading={loading}
+        />
       }
     >
       <ScreenHeader title="Send feedback" subtitle="Tell us what’s working and what isn’t." />
+      <FormError message={formError} />
 
       <View style={styles.group}>
         <Text variant="subheading" color={colors.textSecondary}>
@@ -65,21 +93,15 @@ export default function Feedback() {
         </View>
       </View>
 
-      <View>
-        <TextField
-          appearance="filled"
-          label="Your message"
-          placeholder="Describe what happened or what you’d like to see…"
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={MAX_LENGTH}
-          containerStyle={styles.message}
-        />
-        <Text variant="caption" color={colors.textMuted} align="right" style={styles.counter}>
-          {message.length}/{MAX_LENGTH}
-        </Text>
-      </View>
+      <TextField
+        appearance="filled"
+        label="Your message"
+        placeholder="Describe what happened or what you’d like to see…"
+        {...message.props}
+        multiline
+        maxLength={MAX_LENGTH}
+        counter={`${message.value.length}/${MAX_LENGTH}`}
+      />
 
       <View style={styles.info}>
         <View style={styles.infoTexts}>
@@ -94,6 +116,7 @@ export default function Feedback() {
           accessibilityLabel="Include app info"
         />
       </View>
+      {guard.dialog}
     </Screen>
   );
 }
@@ -103,8 +126,6 @@ const styles = StyleSheet.create({
   group: { gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { height: 42, paddingHorizontal: 16 },
-  message: {},
-  counter: { marginTop: 6 },
   info: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   infoTexts: { flex: 1, gap: 2 },
 });

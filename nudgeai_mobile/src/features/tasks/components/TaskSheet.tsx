@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { dateKey } from '@/lib/date';
+import { TASK_TITLE_MAX, validateTaskTitle } from '@/lib/validation';
 import { toast } from '@/store/useToastStore';
 import { useTasksStore } from '@/store/useTasksStore';
 import { colors, radius } from '@/theme';
@@ -57,7 +58,9 @@ export function TaskSheet({ visible, onClose, task, onDelete }: TaskSheetProps) 
   const [notes, setNotes] = useState(task?.notes ?? '');
   const [repeat, setRepeat] = useState(task?.repeat ?? false);
 
-  const canSubmit = title.trim().length > 0;
+  const [touched, setTouched] = useState(false);
+  const titleError = validateTaskTitle(title);
+  const canSubmit = titleError === null;
   const startTime = time === ALL_DAY ? null : time;
   const inPast =
     startTime !== null && dueAt({ date, startTime, endTime: null }).getTime() < now.getTime();
@@ -65,6 +68,7 @@ export function TaskSheet({ visible, onClose, task, onDelete }: TaskSheetProps) 
   const reset = () => {
     if (editing) return;
     setTitle('');
+    setTouched(false);
     setDate(dateKey());
     setTime('09:00');
     setPriority('High');
@@ -78,7 +82,10 @@ export function TaskSheet({ visible, onClose, task, onDelete }: TaskSheetProps) 
   };
 
   const submit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      setTouched(true);
+      return;
+    }
     const draft = { title, date, time: startTime, priority, notes, repeat };
     if (task) {
       updateTask(task.id, draft);
@@ -127,8 +134,13 @@ export function TaskSheet({ visible, onClose, task, onDelete }: TaskSheetProps) 
         placeholder="e.g. finish case study deck"
         value={title}
         onChangeText={setTitle}
+        onBlur={() => setTouched(true)}
+        error={(touched || title.trim().length > 0) && titleError ? titleError : undefined}
+        success={touched && !titleError}
+        counter={`${title.trim().length}/${TASK_TITLE_MAX}`}
         autoFocus={!editing}
-        maxLength={80}
+        maxLength={TASK_TITLE_MAX + 10}
+        returnKeyType="done"
       />
       <DateField
         label="Date"

@@ -40,9 +40,12 @@ export function StepLayout({
       }
     >
       <View style={styles.top}>
-        <BackButton
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/signup'))}
-        />
+        {/* The first step is reached by replacing the verified screen, so there is nothing to go back to. */}
+        {router.canGoBack() ? (
+          <BackButton onPress={() => router.back()} />
+        ) : (
+          <View style={styles.backSpacer} />
+        )}
         <StepIndicator step={step} total={ONBOARDING_STEPS} />
       </View>
       <View style={styles.heading}>
@@ -58,6 +61,7 @@ export function StepLayout({
 
 const styles = StyleSheet.create({
   top: { gap: 4 },
+  backSpacer: { height: 46 },
   heading: { marginTop: 36, marginBottom: 30 },
   subtitle: { marginTop: 8, maxWidth: 320 },
 });

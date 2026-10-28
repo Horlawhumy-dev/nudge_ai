@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { haptics } from '@/lib/haptics';
 import { colors } from '@/theme';
-
-import { Button } from './Button';
 
 function GoogleLogo({ size = 22 }: { size?: number }) {
   return (
@@ -30,31 +30,78 @@ function GoogleLogo({ size = 22 }: { size?: number }) {
 }
 
 type SocialButtonsProps = {
-  /** "Continue" on login, "Sign Up" on registration. */
+  /** "Continue" on login, "Sign Up" on registration; used for the accessibility labels. */
   verb: string;
   onGoogle: () => void;
   onApple: () => void;
+  disabled?: boolean;
 };
 
-export function SocialButtons({ verb, onGoogle, onApple }: SocialButtonsProps) {
+type CircleProps = {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+  background: string;
+  bordered?: boolean;
+  children: ReactNode;
+};
+
+function Circle({ label, onPress, disabled, background, bordered, children }: CircleProps) {
   return (
-    <View style={styles.stack}>
-      <Button
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={() => {
+        haptics.tap();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.circle,
+        { backgroundColor: background },
+        bordered && styles.bordered,
+        pressed && { opacity: 0.8 },
+        disabled && { opacity: 0.5 },
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** Icon-only round Google and Apple buttons, centred side by side. */
+export function SocialButtons({ verb, onGoogle, onApple, disabled = false }: SocialButtonsProps) {
+  return (
+    <View style={styles.row}>
+      <Circle
         label={`${verb} with Google`}
-        variant="secondary"
-        leading={<GoogleLogo />}
         onPress={onGoogle}
-      />
-      <Button
+        disabled={disabled}
+        background={colors.fill}
+      >
+        <GoogleLogo size={26} />
+      </Circle>
+      <Circle
         label={`${verb} with Apple`}
-        variant="dark"
-        leading={<Ionicons name="logo-apple" size={22} color={colors.textOnInverse} />}
         onPress={onApple}
-      />
+        disabled={disabled}
+        background={colors.inverse}
+      >
+        <Ionicons name="logo-apple" size={28} color={colors.textOnInverse} />
+      </Circle>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  stack: { gap: 14 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24 },
+  circle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bordered: { borderWidth: 1, borderColor: colors.border },
 });

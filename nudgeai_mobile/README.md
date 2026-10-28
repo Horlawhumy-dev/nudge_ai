@@ -31,9 +31,20 @@ The same commands are available as `npm run start | typecheck | lint | test | fo
 
 ## Try it
 
-- **Log in** with any valid email and any password → seeded demo account (4 habits, 5 tasks, notifications, chat history).
-- **Sign up** → any 4-digit verification code works → 5-step setup → an empty Home (the "Your day starts here" state).
-- Forgot password → any 4-digit code → new password (8+ chars, capital, number, special).
+- **Log in** with any valid email and password → seeded demo account (4 habits, 5 tasks, notifications, chat history). Exception: `demo@nudge.ai` needs `Password1!`; a wrong password shows the "Incorrect email or password" error. The login screen has a tap-to-fill hint.
+- **Sign up** → the verification code is `1234` (a wrong code shows an error; the screen has a tap-to-fill hint) → 5-step setup → an empty Home. Signing up with `demo@nudge.ai` shows the "email already exists" error.
+- Forgot password → code `1234` → new password (8+ chars, capital, number, special character).
+
+## Forms and validation
+
+- Validators live in `src/lib/validation.ts` (pure, tested): they return a friendly message or `null`.
+- `useField` (`src/hooks/useField.ts`) holds one field's value, shows its error only after the user leaves
+  the field (or after a failed submit), and surfaces "server" errors until the value is edited.
+- `TextField` renders errors with an icon, a green tick for valid fields, and optional counters. Form-level
+  errors use `FormError`. Primary buttons stay inactive until the form is valid.
+- Mock auth errors come from `AuthError` in `useAuthStore`; the fixed demo values are in `src/constants/env.ts`
+  (`DEMO_MODE`), to be removed when the real API is wired in.
+- `useDiscardGuard` asks before leaving an edit screen with unsaved changes (back button, swipe, hardware back).
 
 ## Layout
 

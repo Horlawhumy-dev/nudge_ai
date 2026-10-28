@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { DEMO_CODE, DEMO_EMAIL, DEMO_PASSWORD } from '@/constants/env';
 import { sleep } from '@/lib/format';
 
 import { useHabitsStore } from './useHabitsStore';
@@ -26,6 +27,21 @@ export function displayName(user: User | null): string {
   if (!user) return '';
   return user.nickname?.trim() || user.name.trim().split(/\s+/)[0] || '';
 }
+
+export type AuthField = 'email' | 'password' | 'code';
+
+/** A failed auth call. `field` says which input to blame; without it the error is form-level. */
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly field?: AuthField
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+const sameEmail = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** Where the user is in the sign-in funnel; routes read this to decide what to show. */
 export type SessionStatus = 'signedOut' | 'unverified' | 'onboarding' | 'ready';
@@ -70,8 +86,12 @@ export const useAuthStore = create<AuthState>()(
 
       markIntroSeen: () => set({ hasSeenIntro: true }),
 
-      signIn: async (email) => {
+      signIn: async (email, password) => {
         await sleep(MOCK_LATENCY_MS);
+        // The only account the static build "knows": a wrong password for it is an error.
+        if (email && sameEmail(email, DEMO_EMAIL) && password !== DEMO_PASSWORD) {
+          throw new AuthError('Incorrect email or password. Check them and try again.');
+        }
         useHabitsStore.getState().seedDemo();
         useTasksStore.getState().seedDemo();
         useNotificationsStore.getState().seedDemo();
@@ -81,6 +101,12 @@ export const useAuthStore = create<AuthState>()(
 
       signUp: async (name, email) => {
         await sleep(MOCK_LATENCY_MS);
+        if (sameEmail(email, DEMO_EMAIL)) {
+          throw new AuthError(
+            'An account with this email already exists. Try logging in instead.',
+            'email'
+          );
+        }
         useHabitsStore.getState().clear();
         useTasksStore.getState().clear();
         useNotificationsStore.getState().clear();
@@ -93,8 +119,11 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      verifyEmail: async () => {
+      verifyEmail: async (code) => {
         await sleep(MOCK_LATENCY_MS);
+        if (code !== DEMO_CODE) {
+          throw new AuthError('That code isn’t right. Check it and try again.', 'code');
+        }
         set({ status: 'onboarding' });
       },
 

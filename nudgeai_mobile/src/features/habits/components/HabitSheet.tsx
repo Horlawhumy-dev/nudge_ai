@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { BottomSheet, Button, Chip, SelectField, Text, TextField, Toggle } from '@/components/ui';
+import { HABIT_NAME_MAX, validateHabitName } from '@/lib/validation';
 import { toast } from '@/store/useToastStore';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
@@ -36,12 +37,18 @@ export function HabitSheet({ visible, onClose, habit }: HabitSheetProps) {
 
   const candidates = habits.filter((h) => h.id !== habit?.id);
   const canStack = stackingEnabled && candidates.length > 0;
-  const canSubmit = name.trim().length > 0;
+  const [touched, setTouched] = useState(false);
+  const nameError = validateHabitName(
+    name,
+    candidates.map((h) => h.name)
+  );
+  const canSubmit = nameError === null;
   const triggerId = trigger ?? candidates[0]?.id ?? null;
 
   const reset = () => {
     if (editing) return;
     setName('');
+    setTouched(false);
     setEmoji(HABIT_ICONS[0]);
     setCategory(HABIT_CATEGORIES[0]);
     setTimeOfDay('Morning');
@@ -56,7 +63,10 @@ export function HabitSheet({ visible, onClose, habit }: HabitSheetProps) {
   };
 
   const submit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      setTouched(true);
+      return;
+    }
     const draft = {
       name: name.trim(),
       emoji,
@@ -98,8 +108,14 @@ export function HabitSheet({ visible, onClose, habit }: HabitSheetProps) {
         placeholder="e.g. morning workout"
         value={name}
         onChangeText={setName}
+        onBlur={() => setTouched(true)}
+        error={(touched || name.trim().length > 0) && nameError ? nameError : undefined}
+        success={touched && !nameError}
+        counter={`${name.trim().length}/${HABIT_NAME_MAX}`}
         autoFocus={!editing}
-        maxLength={40}
+        maxLength={HABIT_NAME_MAX + 10}
+        returnKeyType="done"
+        onSubmitEditing={submit}
       />
 
       <View style={styles.group}>

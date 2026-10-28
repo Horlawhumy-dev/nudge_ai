@@ -40,14 +40,17 @@ export default function HabitDetail() {
 
   if (!habit) {
     return (
-      <Screen background={colors.background} contentStyle={styles.missing}>
-        <EmptyState
-          icon="leaf-outline"
-          title="Habit not found"
-          message="It may have been deleted."
-          actionLabel="Back to habits"
-          onAction={() => router.replace('/habits')}
-        />
+      <Screen background={colors.background}>
+        <ScreenHeader title="Habit" />
+        <View style={styles.missing}>
+          <EmptyState
+            icon="leaf-outline"
+            title="Habit not found"
+            message="It may have been deleted."
+            actionLabel="Back to habits"
+            onAction={() => router.replace('/habits')}
+          />
+        </View>
       </Screen>
     );
   }
@@ -218,7 +221,7 @@ export default function HabitDetail() {
 
 const styles = StyleSheet.create({
   content: { gap: 16, paddingTop: 8 },
-  missing: { justifyContent: 'center' },
+  missing: { flex: 1, justifyContent: 'center' },
   hero: { alignItems: 'center', gap: 12 },
   emojiTile: {
     width: 72,

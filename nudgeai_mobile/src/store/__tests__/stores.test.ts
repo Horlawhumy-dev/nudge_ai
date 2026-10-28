@@ -1,7 +1,8 @@
+import { DEMO_CODE, DEMO_EMAIL, DEMO_PASSWORD } from '@/constants/env';
 import { isDoneToday } from '@/features/habits/utils';
 import { dateKey } from '@/lib/date';
 
-import { useAuthStore } from '../useAuthStore';
+import { AuthError, useAuthStore } from '../useAuthStore';
 import { useHabitsStore } from '../useHabitsStore';
 import { useTasksStore } from '../useTasksStore';
 import { useToastStore, toast } from '../useToastStore';
@@ -134,7 +135,7 @@ describe('useAuthStore session funnel', () => {
     const auth = useAuthStore.getState();
     await auth.signUp('Rophy Alade', 'r@nudge.ai', 'Password1!');
     expect(useAuthStore.getState().status).toBe('unverified');
-    await useAuthStore.getState().verifyEmail('1648');
+    await useAuthStore.getState().verifyEmail(DEMO_CODE);
     expect(useAuthStore.getState().status).toBe('onboarding');
     useAuthStore.getState().completeOnboarding('Rophy');
     expect(useAuthStore.getState()).toMatchObject({ status: 'ready' });
@@ -143,11 +144,38 @@ describe('useAuthStore session funnel', () => {
   });
 
   it('signs in to the seeded demo data and signs out', async () => {
-    await useAuthStore.getState().signIn('demo@nudge.ai', 'x');
+    await useAuthStore.getState().signIn(DEMO_EMAIL, DEMO_PASSWORD);
     expect(useAuthStore.getState().status).toBe('ready');
     expect(useHabitsStore.getState().habits).toHaveLength(4);
     expect(useTasksStore.getState().tasks).toHaveLength(5);
     useAuthStore.getState().signOut();
     expect(useAuthStore.getState()).toMatchObject({ status: 'signedOut', user: null });
+  });
+
+  it('rejects a wrong password for the demo account with a form-level error', async () => {
+    const attempt = useAuthStore.getState().signIn(DEMO_EMAIL, 'wrong');
+    await expect(attempt).rejects.toBeInstanceOf(AuthError);
+    await expect(attempt).rejects.toMatchObject({ field: undefined });
+    expect(useAuthStore.getState().status).toBe('signedOut');
+  });
+
+  it('lets any other email sign in (accounts are not stored in the static build)', async () => {
+    await useAuthStore.getState().signIn('someone@example.com', 'whatever');
+    expect(useAuthStore.getState().status).toBe('ready');
+  });
+
+  it('blames the email field when signing up with an existing address', async () => {
+    await expect(
+      useAuthStore.getState().signUp('Demo User', DEMO_EMAIL.toUpperCase(), 'Password1!')
+    ).rejects.toMatchObject({ field: 'email' });
+    expect(useAuthStore.getState().status).toBe('signedOut');
+  });
+
+  it('blames the code field for a wrong verification code and stays unverified', async () => {
+    await useAuthStore.getState().signUp('Rophy Alade', 'r@nudge.ai', 'Password1!');
+    await expect(useAuthStore.getState().verifyEmail('0000')).rejects.toMatchObject({
+      field: 'code',
+    });
+    expect(useAuthStore.getState().status).toBe('unverified');
   });
 });

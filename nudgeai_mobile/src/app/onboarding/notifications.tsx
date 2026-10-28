@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 
-import { AiOrb, Button, Screen, Text } from '@/components/ui';
+import { AiOrb, BackButton, Button, Screen, Text } from '@/components/ui';
 import { remindersAvailable, requestReminderPermission } from '@/services/notifications';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { toast } from '@/store/useToastStore';
@@ -57,6 +57,7 @@ export default function NotificationsStep() {
         </View>
       }
     >
+      <BackButton />
       <View style={styles.hero}>
         <AiOrb size={150} />
       </View>
