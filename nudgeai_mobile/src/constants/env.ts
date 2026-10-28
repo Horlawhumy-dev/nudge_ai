@@ -1,8 +1,10 @@
 /**
- * The app currently runs without a backend. In demo mode the auth flows use fixed, documented
- * credentials so every error and success path can be exercised. Remove with the API wiring.
+ * Where the backend lives. Set `EXPO_PUBLIC_API_URL` (e.g. `http://192.168.1.20:8079/api/v1`; on
+ * a phone use your computer's LAN address, not localhost). Without it the app runs in demo mode:
+ * no network, fixed credentials, sample data, so every screen can still be exercised offline.
  */
-export const DEMO_MODE = true;
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
+export const DEMO_MODE = API_URL === '';
 
 export const DEMO_EMAIL = 'demo@nudge.ai';
 export const DEMO_PASSWORD = 'Password1!';
