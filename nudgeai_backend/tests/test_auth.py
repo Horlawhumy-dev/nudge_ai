@@ -534,3 +534,53 @@ async def test_reset_requires_the_same_password_policy(
         json={"email": "ada@example.com", "code": code, "new_password": "weakpass1"},
     )
     assert r.status_code == 422
+
+
+# ----------------------------------------------------------------- rate limits and CORS
+
+
+@pytest.fixture
+async def limited(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """Turn limits on with tiny ceilings and a clean slate in Redis."""
+    from app.core.config import get_settings
+    from app.infra.redis import get_redis
+
+    s = get_settings()
+    monkeypatch.setattr(s, "rate_limits_enabled", True)
+    monkeypatch.setattr(s, "rate_limit_login_per_5min", 3)
+    monkeypatch.setattr(s, "rate_limit_code_attempts_per_5min", 3)
+    r = get_redis()
+
+    async def _clear() -> None:
+        keys = [k async for k in r.scan_iter(match="rl:*:login")]
+        keys += [k async for k in r.scan_iter(match="rl:*:codes")]
+        if keys:
+            await r.delete(*keys)
+
+    await _clear()
+    yield
+    await _clear()
+
+
+async def test_login_is_rate_limited(client: AsyncClient, limited: None) -> None:
+    body = {"email": "ada@example.com", "password": "Wrong-pass1"}
+    codes = [(await client.post(f"{PREFIX}/login", json=body)).status_code for _ in range(5)]
+    assert codes[:3] == [401, 401, 401]
+    assert codes[3:] == [429, 429]
+    blocked = await client.post(f"{PREFIX}/login", json=body)
+    assert int(blocked.headers["Retry-After"]) >= 1
+
+
+async def test_code_guessing_is_rate_limited(client: AsyncClient, limited: None) -> None:
+    body = {"email": "ada@example.com", "code": "0000"}
+    codes = [(await client.post(f"{PREFIX}/verify-email", json=body)).status_code for _ in range(4)]
+    assert codes[-1] == 429
+
+
+def test_cors_origins_parse_and_disable_credentials_for_wildcard() -> None:
+    from app.core.config import Settings
+
+    secret = "x" * 40  # Settings refuses short JWT secrets outside dev
+    s = Settings(cors_origins="https://app.nudge.ai, http://localhost:8081", jwt_secret=secret)
+    assert s.cors_origin_list == ["https://app.nudge.ai", "http://localhost:8081"]
+    assert Settings(cors_origins="*", jwt_secret=secret).cors_origin_list == ["*"]

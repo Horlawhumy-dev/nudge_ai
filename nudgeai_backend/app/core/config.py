@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     environment: str = "dev"
     debug: bool = False
     api_prefix: str = "/api/v1"
+    # Comma-separated browser origins allowed by CORS. "*" (the dev default) allows any origin
+    # but, per the CORS spec, cannot be combined with credentials. Native apps are unaffected.
+    cors_origins: str = "*"
 
     # --- database (PostgreSQL 16, local, no docker) ---
     # Socket + peer auth (no password):
@@ -53,6 +56,13 @@ class Settings(BaseSettings):
     verification_code_max_attempts: int = 5
     resend_cooldown_seconds: int = 60
     password_reset_code_ttl_minutes: int = 15
+
+    # --- abuse limits (per client address, fixed window; see app/api/limits.py) ---
+    rate_limits_enabled: bool = True
+    rate_limit_signup_per_hour: int = 10
+    rate_limit_login_per_5min: int = 10
+    rate_limit_code_attempts_per_5min: int = 15
+    rate_limit_forgot_per_hour: int = 6
 
     # --- Meta endpoints (Meta models only) ---
     # Chat runs on the Meta Model API (smart/deep tiers) and Baseten, which
@@ -126,6 +136,10 @@ class Settings(BaseSettings):
     # --- phase 2: observability ---
     # Force the offline fake model so tests never touch a live endpoint.
     force_fake_models: bool = False
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @field_validator("embedding_dim")
     @classmethod

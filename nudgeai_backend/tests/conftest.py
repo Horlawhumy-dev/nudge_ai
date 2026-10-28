@@ -40,6 +40,12 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test shares one client address and one Redis, so limits are opt-in."""
+    monkeypatch.setattr(get_settings(), "rate_limits_enabled", False)
+
+
+@pytest.fixture(autouse=True)
 def outbox(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
     """Capture outgoing email by faking only the Resend SDK call.
 

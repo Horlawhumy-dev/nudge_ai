@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import CurrentUser, SessionDep, client_id
+from app.api.limits import rate_limit
 from app.core.config import get_settings
 from app.infra.redis import get_redis, k_rl
 from app.schemas.models import (
@@ -30,7 +31,16 @@ def _raise(exc: auth_service.AuthError) -> None:
     raise HTTPException(status_code=exc.status, detail=exc.detail)
 
 
-@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/signup",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            rate_limit("signup", limit_setting="rate_limit_signup_per_hour", window_seconds=3600)
+        )
+    ],
+)
 async def signup(payload: SignUpRequest, session: SessionDep) -> UserResponse:
     try:
         user, _ = await auth_service.signup(
@@ -45,7 +55,17 @@ async def signup(payload: SignUpRequest, session: SessionDep) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
-@router.post("/verify-email", response_model=TokenResponse)
+@router.post(
+    "/verify-email",
+    dependencies=[
+        Depends(
+            rate_limit(
+                "codes", limit_setting="rate_limit_code_attempts_per_5min", window_seconds=300
+            )
+        )
+    ],
+    response_model=TokenResponse,
+)
 async def verify_email(payload: VerifyCodeRequest, session: SessionDep) -> TokenResponse:
     """Confirm the emailed code and sign the user straight in.
 
@@ -90,7 +110,13 @@ async def resend_code(
     return MessageResponse(message="if that account needs verification, a new code is on its way")
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    dependencies=[
+        Depends(rate_limit("login", limit_setting="rate_limit_login_per_5min", window_seconds=300))
+    ],
+    response_model=TokenResponse,
+)
 async def login(payload: LoginRequest, session: SessionDep) -> TokenResponse:
     try:
         user, access, refresh = await auth_service.login(
@@ -126,14 +152,32 @@ async def logout(payload: RefreshRequest, session: SessionDep) -> MessageRespons
     return MessageResponse(message="signed out")
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post(
+    "/forgot-password",
+    dependencies=[
+        Depends(
+            rate_limit("forgot", limit_setting="rate_limit_forgot_per_hour", window_seconds=3600)
+        )
+    ],
+    response_model=MessageResponse,
+)
 async def forgot_password(payload: ForgotPasswordRequest, session: SessionDep) -> MessageResponse:
     await auth_service.request_password_reset(session, email=payload.email)
     # Always the same response, so this cannot be used to enumerate accounts.
     return MessageResponse(message="if that account exists, a reset code is on its way")
 
 
-@router.post("/verify-reset", response_model=MessageResponse)
+@router.post(
+    "/verify-reset",
+    dependencies=[
+        Depends(
+            rate_limit(
+                "codes", limit_setting="rate_limit_code_attempts_per_5min", window_seconds=300
+            )
+        )
+    ],
+    response_model=MessageResponse,
+)
 async def verify_reset(payload: VerifyResetRequest, session: SessionDep) -> MessageResponse:
     try:
         await auth_service.verify_reset_code(session, email=payload.email, code=payload.code)
@@ -142,7 +186,17 @@ async def verify_reset(payload: VerifyResetRequest, session: SessionDep) -> Mess
     return MessageResponse(message="code accepted — set a new password")
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post(
+    "/reset-password",
+    dependencies=[
+        Depends(
+            rate_limit(
+                "codes", limit_setting="rate_limit_code_attempts_per_5min", window_seconds=300
+            )
+        )
+    ],
+    response_model=MessageResponse,
+)
 async def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> MessageResponse:
     try:
         await auth_service.reset_password(
