@@ -4,16 +4,19 @@ Expo/React Native client for Nudge AI. Scope is **P0** of
 `../docs/NudgeAI_Meta_AI_Developer_7Day_Hackathon_MVP_Product_Spec.pdf` — onboarding and auth, the
 home nudge dashboard, habits, tasks, progress, Nudge AI chat (text + voice), and account/settings.
 
-**Current state: a static build.** Every screen in the design set (`../Nudge/`) is implemented and
-navigable, plus the screens the design didn't cover (notification inbox, habit detail, privacy, help,
-feedback, …). Data lives in zustand stores persisted to AsyncStorage, so the app resumes where you left
-off. There is no network code yet; `src/services/api/` holds empty placeholders for the backend work.
-`src/services/notifications.ts` schedules real local habit reminders.
+**Current state: wired to the backend, with an offline demo mode.** Every screen in the design set
+(`../Nudge/`) is implemented and navigable, plus the screens the design didn't cover (notification inbox,
+habit detail, privacy, help, feedback, …). With `EXPO_PUBLIC_API_URL` set, the app uses real accounts and
+data from `../nudgeai_backend`; without it, it runs fully offline on sample data (see
+[Connect to the backend](#connect-to-the-backend) and [Try it (demo mode)](#try-it-demo-mode)). The API
+calls are covered by unit tests with the network mocked; push, the microphone and photo upload still need a
+pass on a real device.
 
 ## Stack
 
-Expo SDK 57 · expo-router (typed routes) · TypeScript (strict) · zustand · react-native-svg ·
-expo-linear-gradient · expo-image · Jest + ESLint (React Compiler rules) + Prettier.
+Expo SDK 57 · expo-router (typed routes) · TypeScript (strict) · zustand · axios · expo-secure-store ·
+expo-audio · expo-notifications · expo-image-picker · react-native-svg · expo-linear-gradient · expo-image ·
+Jest + ESLint (React Compiler rules) + Prettier.
 
 ## Scripts
 
@@ -84,7 +87,10 @@ src/components/layout/      floating tab bar + clearance hook
 src/features/<name>/        per-feature types, seed data, pure utils and feature components
 src/store/                  zustand stores: auth session, habits, tasks, chat, preferences, onboarding
 src/lib/                    validation + formatting helpers
-src/services/               notifications.ts: permission + local reminder scheduling
+src/services/api/           axios client (token attach + silent refresh), error normalising, endpoint modules
+src/services/sync.ts        pull habits/tasks/settings/history/inbox after sign-in; push settings changes
+src/services/push.ts        register this phone's push token with the server
+src/services/notifications.ts  permission, local reminders (demo mode), push token
 src/hooks/                  useAppFonts, useCountdown, useAnimatedValue, useNow
 src/theme/                  tokens: palette → colors/gradients, typography, radius, spacing, shadows
 assets/images/              app icons plus art cut from the design set (AI orb, intro art, avatar, confetti)
@@ -95,9 +101,12 @@ Conventions:
 
 - Routes stay thin. Anything reusable lives in `components/` or `features/`.
 - Screens read colours, type and spacing from `@/theme`; no raw hex values in components.
-- Stores expose actions, not setters, and mocked-async actions (auth) take a beat so loading states
-  are real. Replace their bodies with API calls when the backend is wired in.
-- Seed data and scripted chat replies live in `features/*/data.ts` and `features/chat/replies.ts`.
+- Stores expose actions, not setters. With a server account an action updates the screen first, then
+  calls the API in the background, and rolls back with the server's message if it fails
+  (`store/remote.ts` keeps each item's calls in order). In demo mode the same actions stay local, and
+  auth actions take a beat so loading states are real.
+- Seed data and scripted chat replies (demo mode only) live in `features/*/data.ts` and
+  `features/chat/replies.ts`.
 - State that depends on the date (habit done-today, streaks, task overdue) is derived from stored dates,
   never from flags, so it stays correct after midnight and across restarts (`lib/date.ts`, `features/*/utils.ts`).
 - Destructive actions (delete habit/task/notification/chat) show an undo toast (`store/useToastStore.ts`).
@@ -121,14 +130,18 @@ Notes on deviations from the design set:
 
 ## Where the AI lives
 
-Nudge AI is reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
+With an account, Nudge AI talks to the backend: replies stream in, changes it
+proposes appear as Confirm / Not now cards, the mic button records and transcribes speech (audio is never
+saved), and the photo button reads tasks off a picture. In demo mode it gives scripted replies. It is
+reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
 question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
 
 ## Native-only behaviour to check on a device
 
-Haptics, swipe-to-delete rows, OS notification permission and scheduled reminders, and the photo picker
-can't be exercised in the web build. Reminders use local notifications (work in Expo Go); remote push will
-need a development build.
+Haptics, swipe-to-delete rows, OS notification permission, the photo picker and the microphone can't be
+exercised in the web build. In demo mode, reminders are local notifications (they work in Expo Go). With a
+server account the backend sends the nudges as push notifications, which need a development build and an EAS
+project id (`npx eas-cli init`); the app's own scheduled reminders are switched off so nothing arrives twice.
 
 ## Build order
 

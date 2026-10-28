@@ -2,28 +2,40 @@
 
 FastAPI backend for **NudgeAI** — a voice-first habit and task companion.
 
-See `../BACKEND_PLAN.md` for the full three-phase plan and
-`../NudgeAI_Meta_AI_Developer_7Day_Hackathon_MVP_Product_Spec.docx` for the product spec.
+See `../docs/BACKEND_PLAN.md` for the design, `../docs/MOBILE_INTEGRATION.md` for how the mobile app
+uses the API, and `../docs/NudgeAI_Meta_AI_Developer_7Day_Hackathon_MVP_Product_Spec.docx` for the product spec.
 
 ## Status
 
-Phase 1 (foundation) and Phase 2 (model router + tool calling) are implemented
-and green: `ruff check`, `ruff format --check`, and strict `mypy` all pass, and
-the live suite reports **109 passed, 1 skipped** against a real PostgreSQL 16 +
-pgvector database.
+All three planned phases are implemented. `make check` runs `ruff`, `ruff format --check`, strict `mypy`
+and the full suite against a real PostgreSQL 16 + pgvector database (**341 passed, 1 skipped**).
 
-- Migrations `0001_phase1` and `0002_phase2` are applied; `alembic check` reports
-  no model/migration drift. 17 application tables.
-- The 1 skip is the real-embedder paraphrased recall test, which needs
-  `META_API_KEY` and an embedding model. Everything else runs offline via a deterministic fake.
-- Phase 3 (the Nudge Decision Engine) has not started.
+- **API:** 68 paths under `/api/v1` (interactive docs at `/docs`): auth with emailed codes and rotating
+  refresh tokens, profile and avatar, habits, tasks (recurring, soft delete and restore), preferences,
+  plans and limits, notifications and push devices, chat (server-sent events), conversations, proposals,
+  speech, photo extraction, traces, analytics and the weekly report, feedback, and a data export.
+- **Nudge engine:** deterministic rules (quiet hours, cooldowns, snoozes, stacking, streak protection,
+  digest) decide first; the model only writes the sentence. `make worker` runs it, plus recurring-task
+  rolling and the Monday weekly report.
+- **Assistant:** a tiered model router with budgets and a semantic cache, and tool calls that only ever
+  become proposals until the user confirms (`task_create`, `task_update`, `task_complete`,
+  `habit_create`, `habit_complete`, memory tools; reads such as `tasks_list` run directly).
+- **Database:** migrations `0001` to `0011`, 21 tables, `alembic check` reports no drift.
+- **Skipped in the suite:** one real-embedder recall test that needs `META_API_KEY` and an embedding model.
 
 ### Running without an API key
 
-The model client falls back to a clearly-logged `FakeClient` when
-`META_API_KEY` is empty, so the whole app boots and the test suite runs with no
-network calls and no spend. Set the key in `.env` to use the real Meta
+The model client falls back to a clearly-logged `FakeClient` when `META_API_KEY` is empty, so the whole app
+boots and the test suite runs with no network calls and no spend. Set the keys in `.env` to use the real
 endpoints; set `FORCE_FAKE_MODELS=true` to override a key that is present.
+
+### Not done or not verified
+
+- Voice with a real Meta key: the route (`POST /v1/asr/transcribe`) and WAV format follow Meta's docs, but the
+  multipart field names and reply field haven't been checked against a live key (`app/ai/speech.py`).
+- Billing is a stub (`BILLING_STUB_ENABLED`); turn it off in production.
+- No embedding model from Meta yet, so memory search uses an offline stand-in.
+- No model-eval suite; `scripts/probe_meta.py` is the manual live probe.
 
 ## Setup
 
@@ -55,15 +67,21 @@ cp .env.example .env
 Without an embedding model configured the app falls back to `StaticEmbedder`, which is a
 token hash. It keeps the plumbing exercised but has no semantic recall.
 
+Other keys (all optional): `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend (the shared
+`onboarding@resend.dev` sender only reaches the Resend account owner), `CLOUDINARY_CLOUD_NAME` /
+`CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` (avatars; local disk when empty), `EXPO_ACCESS_TOKEN` (push),
+and the model ids `MODEL_FAST` / `MODEL_SMART` / `MODEL_DEEP` / `MUSE_VOICE_MODEL`. See `.env.example`.
+
 ### 3. Install, migrate, run
 
 ```bash
-uv pip install -e ".[dev]"
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+make install            # virtualenv + dependencies
+make db-migrate         # apply migrations 0001 to 0011
+make run                # API on http://127.0.0.1:8079 (docs at /docs)
+make worker             # the nudge worker, in a second terminal
 ```
 
-Open <http://127.0.0.1:8000/docs>.
+`make run HOST=0.0.0.0` makes the API reachable from a phone on your network. `make help` lists every target.
 
 ## Tests
 
@@ -74,8 +92,8 @@ is being verified, so mocking them would test nothing.
 ```bash
 sudo -u postgres createdb -O haroffcode nudgeai_test
 sudo -u postgres psql -d nudgeai_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
-export TEST_DATABASE_URL="postgresql+psycopg://haroffcode@/nudgeai_test?host=/var/run/postgresql"
-uv run pytest
+make test               # uses the nudgeai_test database above
+make check              # lint + format check + mypy + tests (changes nothing)
 ```
 
 Without `TEST_DATABASE_URL` the database tests skip and the pure-logic tests
@@ -91,17 +109,19 @@ app/
   core/      config, security (argon2id + JWT), Prometheus collectors
   db/        SQLAlchemy models, async session
   schemas/   Pydantic v2 request/response
-  services/  domain logic, no HTTP types
+  services/  domain logic, no HTTP types (core, auth, plans, insights, reports, traces, media, ...)
   api/v1/    HTTP routers
-  infra/     redis, embeddings
-  models/    phase 2: registry, router, budgets, Meta and Baseten clients
-  tools/     tool protocol, memory + calendar tools, dispatch loop
-  ai/        prompts, proposal confirmation gate
+  infra/     redis, embeddings, mailer (Resend), push (Expo), cloudinary
+  models/    registry, router, budgets, Meta and Baseten clients
+  tools/     tool protocol, memory/calendar/planner tools, the dispatch loop
+  ai/        prompts, proposal confirmation gate, speech, tone
+  engine/    nudge rules (pure), candidate loading, scheduler, worker
 alembic/     migrations
-tests/       pytest
+scripts/     probe_meta.py (manual live check)
+tests/       pytest, against real PostgreSQL
 ```
 
-## Phase 2: routing and tool calling
+## Routing and tool calling
 
 ### The router never spends a model call to decide
 
@@ -124,8 +144,9 @@ call.
 
 ### The confirmation gate
 
-`memory_remember` and `memory_forget` are marked `mutating`, so the executor
-never calls their `run()`. It writes a `tool_proposals` row instead and the
+Every tool that changes data (`memory_remember`, `memory_forget`, `task_create`, `task_update`,
+`task_complete`, `habit_create`, `habit_complete`) is marked `mutating`, so the executor never calls its
+`run()`. It writes a `tool_proposals` row instead and the
 response carries `proposals[]`; the write happens only at
 `POST /api/v1/proposals/{id}/confirm`. Confirmation is owner-checked and
 single-use (a second confirm is a 409), and pending proposals older than 24h are
@@ -155,8 +176,20 @@ per-million-token rates in `app/models/registry.py`.
 - The test suite forces the offline fake via an autouse fixture, so a stray
   `META_API_KEY` in your shell cannot make the suite spend money.
 -
-- **Live Meta validation (Gate 2b)**: pending. The Meta Model API and Baseten clients are hackathon work; this section will record the live probe results once they run. Probe with keys in `.env` (never in the suite):
+- **Live Meta validation:** not recorded yet. Probe with your keys in `.env` (never in the suite):
 
 ```bash
-uv run python scripts/probe_meta.py
+.venv/bin/python scripts/probe_meta.py
 ```
+
+## Voice, photos and media
+
+- **Voice** (`POST /speech/transcribe`): the app sends a mono 16-bit WAV; the server forwards it to Meta's
+  speech model and returns text. Audio is held in memory only, never written to disk or the database.
+- **Photos** (`POST /vision/extract`): a to-do list or whiteboard becomes task and habit *proposals*.
+  The model gets only the two "create" tools, and text inside the image is treated as data, so an image
+  cannot trigger other actions. Nothing is saved until the user confirms.
+- **Avatars:** Cloudinary when configured (cropped square around the face, small `avatar_thumb_url` for
+  lists, signed direct upload from the app via `POST /profile/avatar/intent`), otherwise local disk.
+- **Traces** (`GET /traces`, `GET /traces/{id}`): each chat turn stores its route, hops, tool steps (no tool
+  output), proposals, tokens, cost and latency. The `meta` stream event carries the `trace_id`.
