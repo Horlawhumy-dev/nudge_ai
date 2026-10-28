@@ -44,8 +44,8 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
               onPress={onPress}
               style={[styles.tab, focused && styles.tabActive]}
             >
-              <Icon name={item.icon} size={22} color={tint} />
-              <Text variant="body" color={tint}>
+              <Icon name={item.icon} size={19} color={tint} />
+              <Text variant="caption" color={tint} style={styles.label}>
                 {item.label}
               </Text>
             </Pressable>
@@ -57,13 +57,14 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
+  label: { fontSize: 11, lineHeight: 14 },
   host: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: gutter },
   bar: {
     height: TAB_BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 6,
-    borderRadius: 34,
+    padding: 4,
+    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderWidth: 1,
     borderColor: colors.borderSoft,
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 1,
     borderRadius: 28,
   },
   tabActive: { backgroundColor: colors.primarySoft },

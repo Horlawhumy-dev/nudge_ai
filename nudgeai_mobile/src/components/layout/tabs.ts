@@ -10,4 +10,4 @@ export const TAB_ITEMS: Record<TabName, { label: string; icon: IconName }> = {
   profile: { label: 'Profile', icon: 'person-outline' },
 };
 
-export const TAB_BAR_HEIGHT = 68;
+export const TAB_BAR_HEIGHT = 56;
