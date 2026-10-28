@@ -131,9 +131,10 @@ async def signup(
 async def resend_verification(session: AsyncSession, *, email: str) -> str | None:
     """Issue a fresh verification code, replacing any unconsumed one.
 
-    Returns None for an unknown address, an already-verified account, or an
-    account with a live code — the caller must not distinguish those, or the
-    endpoint becomes an account-existence oracle.
+    Returns None for an unknown address or an already-verified account; the caller
+    must not distinguish those from success, or the endpoint becomes an
+    account-existence oracle. A still-valid code is emailed again as it is, never
+    replaced, so repeated presses cannot invalidate a code the user already has.
     """
     s = get_settings()
     email = email.lower().strip()
@@ -153,7 +154,11 @@ async def resend_verification(session: AsyncSession, *, email: str) -> str | Non
         .limit(1)
     )
     if existing is not None and existing.expires_at > now:
-        # A live code is still usable; the cooldown endpoint already throttles.
+        # The code is still good, but the user is asking because the email never arrived (or got
+        # lost), so send that same code again. The cooldown endpoint already throttles this.
+        minutes_left = max(1, -(-int((existing.expires_at - now).total_seconds()) // 60))
+        await _deliver_code(email, existing.code, EMAIL_VERIFICATION, minutes_left)
+        log.info("verification code re-sent for %s", email)
         return None
 
     # Retire the old row so only one code can ever be live per purpose.

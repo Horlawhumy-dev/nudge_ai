@@ -103,7 +103,9 @@ async def resend_code(
         allowed = True
     if not allowed:
         raise HTTPException(
-            status_code=429, detail=f"wait {s.resend_cooldown_seconds}s before resending"
+            status_code=429,
+            detail=f"wait {s.resend_cooldown_seconds}s before resending",
+            headers={"Retry-After": str(s.resend_cooldown_seconds)},
         )
     # Issues a replacement code when one is genuinely needed. The response is the
     # same either way, so this cannot be used to enumerate accounts.

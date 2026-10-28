@@ -253,6 +253,7 @@ async def test_resend_code_is_rate_limited(client: AsyncClient) -> None:
     second = await client.post(f"{PREFIX}/resend-code", json={"email": "ada@example.com"})
     assert first.status_code == 200
     assert second.status_code == 429
+    assert int(second.headers["retry-after"]) > 0  # the app sizes its countdown from this
 
 
 async def test_resend_code_actually_issues_a_replacement(
@@ -296,11 +297,20 @@ async def test_resend_code_actually_issues_a_replacement(
     assert verified.status_code == 200
 
 
-async def test_resend_does_not_reissue_while_a_code_is_live(
-    client: AsyncClient, session: AsyncSession
+async def test_resend_re_emails_a_live_code_without_replacing_it(
+    client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A still-valid code is left alone, so a spammer cannot invalidate it."""
+    """The user asked because the email didn't arrive, so it is sent again. The code itself is
+    kept, so pressing Resend repeatedly can never invalidate a code they already have."""
     from app.infra.redis import get_redis
+    from app.services import auth_service
+
+    sent: list[tuple[str, str, str]] = []
+
+    async def fake_deliver(email: str, code: str, purpose: str, ttl_minutes: int) -> None:
+        sent.append((email, code, purpose))
+
+    monkeypatch.setattr(auth_service, "_deliver_code", fake_deliver)
 
     r = get_redis()
     stale = [k async for k in r.scan_iter(match="rl:*:resend")]
@@ -312,9 +322,11 @@ async def test_resend_does_not_reissue_while_a_code_is_live(
         select(VerificationCode).where(VerificationCode.purpose == "email_verification")
     )
     assert before is not None
+    sent.clear()  # forget the email sent at sign-up
     assert (
         await client.post(f"{PREFIX}/resend-code", json={"email": "ada@example.com"})
     ).status_code == 200
+    assert sent == [("ada@example.com", before.code, "email_verification")]
     live = (
         (
             await session.execute(
