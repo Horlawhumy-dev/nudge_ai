@@ -499,6 +499,27 @@ class Subscription(Base):
 # =================================================================== chat
 
 
+class Conversation(Base):
+    """A chat thread. The model only ever sees the messages of the thread being continued."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=_now
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_conversations_user_updated", "user_id", "updated_at"),)
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
@@ -511,10 +532,18 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_calls: Mapped[list[dict[str, object]] | None] = mapped_column(JSONB)
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    # How the user said it: typed or spoken (assistant replies mirror the user's turn).
+    via: Mapped[str] = mapped_column(
+        String(8), default="text", server_default="text", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         CheckConstraint("role in ('user','assistant','system','tool')", name="ck_chat_role"),
+        CheckConstraint("via in ('text','voice')", name="ck_chat_via"),
         Index("ix_chat_user_created", "user_id", "created_at"),
     )
 

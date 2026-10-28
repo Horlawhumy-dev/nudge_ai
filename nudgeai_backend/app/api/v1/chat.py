@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -21,7 +21,8 @@ from app.core.config import get_settings
 from app.db.models import ChatMessage, Preference, ToolProposal
 from app.models.budgets import seconds_until_reset
 from app.models.router import RouteRequest
-from app.services import memory_service
+from app.services import conversation_service, memory_service
+from app.services.core_service import NotFound
 from app.tools import calendar as calendar_tools
 from app.tools import memory as memory_tools
 from app.tools.base import ToolRegistry
@@ -41,6 +42,10 @@ class ChatRequest(BaseModel):
     requires_planning: bool | None = None
     has_image: bool = False
     use_cache: bool = True
+    # Continue this thread; omit to start a new one (its id comes back in the first SSE event).
+    conversation_id: UUID | None = None
+    # How the message was entered, so history can show "Voice" vs "Text" chats.
+    via: Literal["text", "voice"] = "text"
 
 
 class ProposalOut(BaseModel):
@@ -70,13 +75,18 @@ def _build_registry(user_id: UUID, session: Any) -> ToolRegistry:
     return registry
 
 
-async def _load_history(session: Any, user_id: UUID, limit: int) -> list[dict[str, str]]:
-    """Most recent `limit` messages, oldest first, excluding the current turn."""
+async def _load_history(
+    session: Any, user_id: UUID, conversation_id: UUID, limit: int
+) -> list[dict[str, str]]:
+    """Most recent `limit` messages of this conversation, oldest first, excluding the new turn."""
     rows = (
         (
             await session.execute(
                 select(ChatMessage)
-                .where(ChatMessage.user_id == user_id)
+                .where(
+                    ChatMessage.user_id == user_id,
+                    ChatMessage.conversation_id == conversation_id,
+                )
                 .order_by(ChatMessage.created_at.desc())
                 .limit(limit)
             )
@@ -98,8 +108,22 @@ async def _persist(
     role: str,
     content: str,
     tool_calls: list[dict[str, Any]] | None = None,
+    *,
+    conversation_id: UUID | None = None,
+    via: str = "text",
 ) -> None:
-    session.add(ChatMessage(user_id=user_id, role=role, content=content, tool_calls=tool_calls))
+    session.add(
+        ChatMessage(
+            user_id=user_id,
+            role=role,
+            content=content,
+            tool_calls=tool_calls,
+            conversation_id=conversation_id,
+            via=via,
+        )
+    )
+    if conversation_id is not None:
+        await conversation_service.touch(session, conversation_id)
     metrics.chat_messages_total.labels(role=role).inc()
     await session.commit()
 
@@ -116,7 +140,18 @@ async def chat(
     s = get_settings()
     user_id = user.id
 
-    history = await _load_history(session, user_id, s.chat_history_messages)
+    # Continue an existing thread, or start one named after this first message.
+    if body.conversation_id is not None:
+        try:
+            convo = await conversation_service.get(session, user_id, body.conversation_id)
+        except NotFound as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    else:
+        convo = await conversation_service.create(session, user_id, first_message=body.message)
+        await session.commit()
+    conversation_id, conversation_title = convo.id, convo.title
+
+    history = await _load_history(session, user_id, conversation_id, s.chat_history_messages)
     tone = await _tone(session, user_id)
 
     # Retrieved memory is context, capped hard: a 1M window is not a licence.
@@ -135,9 +170,12 @@ async def chat(
         has_tools=True,
     )
     registry = _build_registry(user_id, session)
-    await _persist(session, user_id, "user", body.message)
+    await _persist(
+        session, user_id, "user", body.message, conversation_id=conversation_id, via=body.via
+    )
 
     async def event_stream() -> Any:
+        yield _sse("conversation", {"id": str(conversation_id), "title": conversation_title})
         executor = Executor()
         result: TurnResult | None = None
         try:
@@ -180,6 +218,8 @@ async def chat(
             result.content,
             tool_calls=[{"tool": t["tool"], "ok": t.get("ok", False)} for t in result.tool_results]
             or None,
+            conversation_id=conversation_id,
+            via=body.via,
         )
         # A cached turn is already paid for, so it is not worth storing again.
         if not result.cached and result.content:
@@ -202,16 +242,13 @@ async def chat_history(
     user: CurrentUser,
     session: SessionDep,
     limit: int = Query(50, ge=1, le=200),
+    conversation_id: UUID | None = Query(default=None, description="Only this conversation."),
 ) -> list[HistoryOut]:
+    stmt = select(ChatMessage).where(ChatMessage.user_id == user.id)
+    if conversation_id is not None:
+        stmt = stmt.where(ChatMessage.conversation_id == conversation_id)
     rows = (
-        (
-            await session.execute(
-                select(ChatMessage)
-                .where(ChatMessage.user_id == user.id)
-                .order_by(ChatMessage.created_at.desc())
-                .limit(limit)
-            )
-        )
+        (await session.execute(stmt.order_by(ChatMessage.created_at.desc()).limit(limit)))
         .scalars()
         .all()
     )

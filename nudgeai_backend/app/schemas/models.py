@@ -507,6 +507,33 @@ class FeedbackResponse(BaseModel):
     kind: str
 
 
+# ================================================================ conversations
+
+
+class ConversationSummary(BaseModel):
+    id: UUID
+    title: str
+    mode: Literal["text", "voice", "voice+text"]
+    message_count: int
+    preview: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationMessage(BaseModel):
+    id: UUID
+    role: str
+    content: str
+    via: Literal["text", "voice"]
+    created_at: datetime
+
+
+class ConversationDetail(BaseModel):
+    id: UUID
+    title: str
+    messages: list[ConversationMessage]
+
+
 # ========================================================== inbox and devices
 
 NotificationKind = Literal["nudge", "summary", "streak", "insight", "system"]
