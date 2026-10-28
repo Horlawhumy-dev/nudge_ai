@@ -39,6 +39,12 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Nudge uses the microphone so you can talk to Nudge AI. Recordings are sent for transcription and never saved."
+        }
+      ],
       "expo-font",
       [
         "expo-notifications",

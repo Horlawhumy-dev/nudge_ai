@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { DEMO_MODE } from '@/constants/env';
 import { useChatStore } from '@/store/useChatStore';
+
+import { useLiveVoiceSession } from './useLiveVoiceSession';
 
 export type VoicePhase = 'listening' | 'paused' | 'transcribing' | 'generating' | 'idle';
 
@@ -18,7 +21,7 @@ const WORD_MS = 380;
 const SETTLE_MS = 700;
 const TRANSCRIBE_MS = 700;
 
-export function useVoiceSession() {
+function useSimulatedVoiceSession() {
   const send = useChatStore((s) => s.send);
   const [phase, setPhase] = useState<VoicePhase>('listening');
   const [revealed, setRevealed] = useState(0);
@@ -71,3 +74,6 @@ export function useVoiceSession() {
     togglePause,
   };
 }
+
+/** The microphone for a server account; the scripted demo otherwise. Fixed for the app's life. */
+export const useVoiceSession = DEMO_MODE ? useSimulatedVoiceSession : useLiveVoiceSession;
