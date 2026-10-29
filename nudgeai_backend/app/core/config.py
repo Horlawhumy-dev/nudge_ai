@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     rate_limit_forgot_per_hour: int = 6
     rate_limit_speech_per_minute: int = 20
     rate_limit_tts_per_minute: int = 20
+    rate_limit_live_per_minute: int = 12
     rate_limit_vision_per_minute: int = 6
 
     # --- Meta endpoints (Meta models only) ---
@@ -175,6 +176,12 @@ class Settings(BaseSettings):
     # A voice note is a chat turn, not a recording session.
     speech_max_bytes: int = 10_000_000
     speech_timeout_seconds: float = 60.0
+    # Live transcription: the phone streams audio to us, we relay it to Meta's realtime endpoint and
+    # pass the words back as they are spoken. Empty URL = derive it from META_API_BASE_URL.
+    live_speech_enabled: bool = True
+    muse_voice_live_url: str = ""
+    live_speech_max_seconds: int = 120
+    live_speech_start_timeout_seconds: float = 10.0
     # Spoken replies (text to speech). The one non-Meta AI service: Meta has no speech-output model.
     # Empty key = off; the app then falls back to the phone's own voice.
     elevenlabs_api_key: str = ""
@@ -241,6 +248,15 @@ class Settings(BaseSettings):
                 "32. Generate one with: "
                 'python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
+
+    @property
+    def live_speech_url(self) -> str:
+        if self.muse_voice_live_url:
+            return self.muse_voice_live_url
+        base = self.meta_api_base_url.rstrip("/")
+        return (
+            base.replace("https://", "wss://", 1).replace("http://", "ws://", 1) + "/asr/realtime"
+        )
 
     @property
     def cloudinary_enabled(self) -> bool:

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+import asyncio
+import contextlib
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel, Field
 
-from app.ai import speech, tts
+from app.ai import live_speech, speech, tts
 from app.api.deps import CurrentUser
 from app.api.limits import rate_limit
 from app.core.config import get_settings
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/speech", tags=["speech"])
 
@@ -93,3 +100,70 @@ async def synthesize(body: SynthesizeRequest, user: CurrentUser) -> Response:
         # The audio is generated for this exact text, so it is safe for the phone to keep a copy.
         headers={"Cache-Control": "private, max-age=86400"},
     )
+
+
+# --------------------------------------------------------------------------- live (WebSocket)
+
+
+class _PhoneChannel:
+    """Adapts a Starlette WebSocket to the relay's small `Channel` interface."""
+
+    def __init__(self, ws: WebSocket) -> None:
+        self._ws = ws
+
+    async def receive(self) -> tuple[str, bytes | str]:
+        message = await self._ws.receive()
+        if message["type"] == "websocket.disconnect":
+            return ("closed", "")
+        if message.get("bytes") is not None:
+            return ("bytes", message["bytes"])
+        return ("text", message.get("text") or "")
+
+    async def send_json(self, data: dict[str, Any]) -> None:
+        await self._ws.send_json(data)
+
+
+async def _read_start(ws: WebSocket) -> dict[str, Any]:
+    """The first frame must be a `start` message; nothing else is accepted before it."""
+    timeout = get_settings().live_speech_start_timeout_seconds
+    try:
+        first = await asyncio.wait_for(ws.receive_json(), timeout)
+    except (TimeoutError, ValueError, KeyError, RuntimeError) as exc:
+        raise live_speech.LiveError("bad_request", "send a start message first") from exc
+    if not isinstance(first, dict) or first.get("type") != "start":
+        raise live_speech.LiveError("bad_request", "send a start message first")
+    return first
+
+
+@router.websocket("/live")
+async def live(ws: WebSocket) -> None:
+    """Live transcription. See `app.ai.live_speech` for the message protocol."""
+    await ws.accept()
+    s = get_settings()
+    try:
+        if not s.live_speech_enabled:
+            raise live_speech.LiveError("unavailable", "live transcription is switched off")
+        start = await _read_start(ws)
+        user_id = await live_speech.authenticate(start.get("token"))
+        requested = start.get("mode")
+        mode = requested if requested in live_speech.MODES else "ENDPOINTING"
+        keywords = [k for k in start.get("keywords") or [] if isinstance(k, str)][:20]
+        async with live_speech.Slot(user_id):
+            await live_speech.run_session(
+                _PhoneChannel(ws),
+                live_speech.meta_upstream_factory(mode, keywords),
+                mode=mode,
+                max_seconds=s.live_speech_max_seconds,
+            )
+    except live_speech.LiveError as exc:
+        with contextlib.suppress(Exception):
+            await ws.send_json({"type": "error", "code": exc.code, "message": exc.message})
+    except Exception:  # noqa: BLE001 - the phone falls back to uploading the recording
+        log.exception("live transcription failed")
+        with contextlib.suppress(Exception):
+            await ws.send_json(
+                {"type": "error", "code": "unavailable", "message": "live transcription failed"}
+            )
+    finally:
+        with contextlib.suppress(Exception):
+            await ws.close()
