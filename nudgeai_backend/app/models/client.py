@@ -105,15 +105,18 @@ class MetaClient:
         timeout: float,
         max_retries: int,
         backoff: float,
-        reasoning_effort: str | None = None,
+        reasoning_efforts: dict[str, str] | None = None,
     ) -> None:
         from openai import AsyncOpenAI
 
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self._max_retries = max_retries
         self._backoff = backoff
-        # Only for endpoints that take it (Baseten's Muse Spark Open); sent as an extra body field.
-        self._reasoning_effort = reasoning_effort or None
+        # How hard each tier thinks, sent as an extra body field. A reasoning model waits on (and
+        # bills) its hidden thinking, so this is the main latency dial. Missing = provider default.
+        self._efforts = {
+            tier: effort for tier, effort in (reasoning_efforts or {}).items() if effort
+        }
 
     async def complete(
         self,
@@ -133,8 +136,9 @@ class MetaClient:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        if self._reasoning_effort:
-            kwargs["extra_body"] = {"reasoning_effort": self._reasoning_effort}
+        effort = self._efforts.get(spec.tier)
+        if effort:
+            kwargs["extra_body"] = {"reasoning_effort": effort}
 
         last: Exception | None = None
         for attempt in range(self._max_retries + 1):
@@ -353,7 +357,11 @@ def _provider_client(
             timeout=s.model_timeout_seconds,
             max_retries=s.model_max_retries,
             backoff=s.model_retry_backoff_seconds,
-            reasoning_effort=s.fast_reasoning_effort if provider == "baseten" else None,
+            reasoning_efforts=(
+                {"fast": s.fast_reasoning_effort}
+                if provider == "baseten"
+                else {"smart": s.smart_reasoning_effort, "deep": s.deep_reasoning_effort}
+            ),
         )
     if key:
         log.warning(

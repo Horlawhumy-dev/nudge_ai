@@ -150,6 +150,12 @@ class Settings(BaseSettings):
     # that. Sent to Baseten only. Empty string means don't send it. Do NOT cap max_tokens
     # tightly instead: the cap is spent on reasoning and the reply comes back empty.
     fast_reasoning_effort: str = "low"
+    # The same dial on the Meta Model API. Measured on "book my dentist tomorrow at 3 and nudge me",
+    # five runs each: median 3.2 s by default versus 2.5 s at low, so a modest gain, with noisy
+    # latency either side. `deep` is the multimodal and hardest-planning tier, so it keeps more
+    # thought. Raise it if plans come out worse than you want.
+    smart_reasoning_effort: str = "low"
+    deep_reasoning_effort: str = "medium"
     model_timeout_seconds: float = 120.0
     model_max_retries: int = 1
     model_retry_backoff_seconds: float = 1.0
