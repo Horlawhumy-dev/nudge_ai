@@ -1,12 +1,19 @@
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 
 import { SuccessScreen } from '@/features/auth/components/SuccessScreen';
 import { firstName } from '@/lib/format';
+import { welcomeAloud } from '@/services/welcome';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 export default function Ready() {
   const router = useRouter();
   const name = useOnboardingStore((s) => firstName(s.name));
+
+  // The first words Nudge says to someone who has just set it up.
+  useEffect(() => {
+    welcomeAloud('new');
+  }, []);
 
   return (
     <SuccessScreen

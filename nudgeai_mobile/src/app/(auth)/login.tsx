@@ -17,9 +17,9 @@ import { AuthHeader } from '@/features/auth/components/AuthHeader';
 import { DemoHint } from '@/features/auth/components/DemoHint';
 import { LinkText } from '@/features/auth/components/LinkText';
 import { useField } from '@/hooks/useField';
-import { firstName } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { validateEmail, validatePasswordPresent } from '@/lib/validation';
+import { welcomeAloud } from '@/services/welcome';
 import { AuthError, useAuthStore } from '@/store/useAuthStore';
 import { toast } from '@/store/useToastStore';
 import { colors } from '@/theme';
@@ -47,8 +47,8 @@ export default function Login() {
     try {
       await signIn(emailValue, passwordValue);
       haptics.success();
-      const name = firstName(useAuthStore.getState().user?.name ?? '');
-      toast.success(name ? `Welcome back, ${name}!` : 'Welcome back!');
+      // A personal welcome: said aloud (unless voice is off) and shown as a short line.
+      toast.success(welcomeAloud('returning').headline);
       // Someone who signed up but never finished setup continues there.
       router.replace(
         useAuthStore.getState().status === 'onboarding' ? '/onboarding/step-1' : '/home'

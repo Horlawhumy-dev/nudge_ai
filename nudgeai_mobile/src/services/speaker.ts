@@ -98,10 +98,18 @@ export async function speak(markdown: string, options: Options = {}): Promise<Sp
 
   if (!DEMO_MODE && Date.now() >= serverVoiceDownUntil) {
     try {
-      return await playBytes(await speechApi.synthesize(text), tone, onEnd);
-    } catch {
+      const handle = await playBytes(await speechApi.synthesize(text), tone, onEnd);
+      if (__DEV__) console.log('[nudge] speaking with the ElevenLabs voice');
+      return handle;
+    } catch (e) {
       serverVoiceDownUntil = Date.now() + RETRY_AFTER_MS;
+      if (__DEV__)
+        console.log(`[nudge] ElevenLabs voice unavailable, using the phone's: ${String(e)}`);
     }
+  } else if (__DEV__) {
+    console.log(
+      '[nudge] speaking with the phone voice (demo mode or server voice recently failed)'
+    );
   }
   return speakOnDevice(text, tone, onEnd);
 }
