@@ -4,6 +4,8 @@ import { Text } from '@/components/ui';
 import { colors, radius, shadows } from '@/theme';
 
 import type { ChatMessage } from '../types';
+import { plainText } from '../markdown';
+import { ChatMarkdown } from './ChatMarkdown';
 import { ProposalCard } from './ProposalCard';
 
 type Props = {
@@ -15,14 +17,11 @@ type Props = {
 export function MessageBubble({ message, onProposal, onRetry }: Props) {
   if (message.role === 'assistant') {
     return (
-      <View style={styles.assistant} accessibilityLabel={`Nudge: ${message.text}`}>
-        <Text
-          variant="bodyLarge"
+      <View style={styles.assistant} accessibilityLabel={`Nudge: ${plainText(message.text)}`}>
+        <ChatMarkdown
+          text={message.text}
           color={message.failed ? colors.textSecondary : undefined}
-          style={styles.assistantText}
-        >
-          {message.text}
-        </Text>
+        />
         {message.failed && onRetry ? (
           <Pressable
             accessibilityRole="button"
@@ -64,7 +63,6 @@ export function MessageBubble({ message, onProposal, onRetry }: Props) {
 
 const styles = StyleSheet.create({
   assistant: { maxWidth: '85%' },
-  assistantText: { lineHeight: 25 },
   retry: { marginTop: 8, alignSelf: 'flex-start' },
   userRow: { alignItems: 'flex-end' },
   user: {
