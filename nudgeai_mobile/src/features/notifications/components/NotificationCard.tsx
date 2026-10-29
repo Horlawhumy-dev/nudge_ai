@@ -11,6 +11,7 @@ const KIND: Record<NudgeKind, { icon: IconName; tint: string; color: string }> =
   summary: { icon: 'sunny', tint: '#FFF1CC', color: '#E39A00' },
   streak: { icon: 'flame', tint: colors.dangerSoft, color: colors.danger },
   insight: { icon: 'sparkles', tint: '#E4EBFF', color: '#5E7BE8' },
+  reminder: { icon: 'alarm', tint: colors.primaryTint, color: colors.primary },
   system: { icon: 'information-circle', tint: colors.fill, color: colors.textSecondary },
 };
 

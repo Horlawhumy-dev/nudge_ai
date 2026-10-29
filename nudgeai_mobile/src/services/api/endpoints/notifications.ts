@@ -8,6 +8,7 @@ type ApiNotification = {
   title: string;
   body: string;
   habit_id: string | null;
+  task_id?: string | null;
   read: boolean;
   created_at: string;
 };
@@ -22,6 +23,8 @@ function hrefFor(n: ApiNotification): NudgeNotification['href'] {
       return '/habits';
     case 'streak':
       return '/streak';
+    case 'reminder':
+      return '/tasks';
     case 'insight':
       return '/progress';
     default:

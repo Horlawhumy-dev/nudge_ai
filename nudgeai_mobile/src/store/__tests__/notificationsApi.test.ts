@@ -90,6 +90,7 @@ describe('notificationFromApi', () => {
     expect(notificationFromApi({ ...base, kind: 'streak' }).href).toBe('/streak');
     expect(notificationFromApi({ ...base, kind: 'nudge' }).href).toBe('/habits');
     expect(notificationFromApi({ ...base, kind: 'insight' }).href).toBe('/progress');
+    expect(notificationFromApi({ ...base, kind: 'reminder', task_id: 't1' }).href).toBe('/tasks');
   });
 
   it('opens the weekly report from its inbox message', () => {

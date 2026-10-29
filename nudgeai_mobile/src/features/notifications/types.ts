@@ -1,4 +1,4 @@
-export type NudgeKind = 'nudge' | 'summary' | 'streak' | 'insight' | 'system';
+export type NudgeKind = 'nudge' | 'summary' | 'streak' | 'insight' | 'system' | 'reminder';
 
 export type NudgeNotification = {
   id: string;
