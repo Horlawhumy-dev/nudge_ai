@@ -43,9 +43,19 @@ export default function Login() {
       haptics.success();
       const name = firstName(useAuthStore.getState().user?.name ?? '');
       toast.success(name ? `Welcome back, ${name}!` : 'Welcome back!');
-      router.replace('/home');
+      // Someone who signed up but never finished setup continues there.
+      router.replace(
+        useAuthStore.getState().status === 'onboarding' ? '/onboarding/step-1' : '/home'
+      );
     } catch (e) {
       haptics.warning();
+      // The account exists but its email isn't confirmed yet: sign-in re-sent a code, so go and enter it.
+      if (useAuthStore.getState().status === 'unverified') {
+        toast.show(`Verify your email first. We sent a new code to ${emailValue.trim()}.`);
+        router.push('/verify');
+        setLoading(false);
+        return;
+      }
       setFormError(e instanceof AuthError ? e.message : 'Something went wrong. Please try again.');
       setLoading(false);
     }

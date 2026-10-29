@@ -52,7 +52,6 @@ export default function Splash() {
       const { status, hasSeenIntro } = useAuthStore.getState();
       if (status === 'ready') router.replace('/home');
       else if (status === 'onboarding') router.replace('/onboarding/step-1');
-      else if (status === 'unverified') router.replace('/verify');
       else router.replace(hasSeenIntro ? '/login' : '/intro');
     });
     return () => {

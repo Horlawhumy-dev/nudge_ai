@@ -99,6 +99,33 @@ describe('auth store with a backend', () => {
     expect(auth.resendCode).toHaveBeenCalledWith('ada@example.com');
   });
 
+  it('does not remember "waiting for the code" across app restarts', () => {
+    const { partialize, merge } = useAuthStore.persist.getOptions();
+    const waiting = {
+      ...useAuthStore.getState(),
+      status: 'unverified' as const,
+      user: { id: 'u', name: 'Ada', email: 'ada@example.com' },
+      pendingEmail: 'ada@example.com',
+    };
+    expect(partialize?.(waiting)).toMatchObject({
+      status: 'signedOut',
+      user: null,
+      pendingEmail: null,
+    });
+
+    // a phone that already saved the old state is cleaned up when it loads it
+    const current = useAuthStore.getState();
+    const merged = merge?.(
+      { status: 'unverified', user: { id: 'u' }, hasSeenIntro: true },
+      current
+    );
+    expect(merged).toMatchObject({ status: 'signedOut', user: null, hasSeenIntro: true });
+
+    // signed-in sessions are kept
+    const kept = merge?.({ status: 'ready', user: { id: 'u' } }, current);
+    expect(kept).toMatchObject({ status: 'ready', user: { id: 'u' } });
+  });
+
   it('blames the email field when sign-up says it is taken', async () => {
     auth.signUp.mockRejectedValue(new ApiError('email already registered', 409));
     const err = await useAuthStore

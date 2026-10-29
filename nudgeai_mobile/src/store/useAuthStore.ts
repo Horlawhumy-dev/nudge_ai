@@ -430,12 +430,27 @@ export const useAuthStore = create<AuthState>()(
       name: 'nudge.auth',
       version: STORE_VERSION,
       storage: persistStorage,
+      // "Waiting for the emailed code" only lasts for this run of the app. Saving it would send the
+      // user to the verify screen on every launch; instead they land on login, which resumes
+      // verification (with a fresh code) if the account really still needs it.
       partialize: (s) => ({
-        status: s.status,
-        user: s.user,
-        pendingEmail: s.pendingEmail,
+        status: s.status === 'unverified' ? 'signedOut' : s.status,
+        user: s.status === 'unverified' ? null : s.user,
+        pendingEmail: null,
         hasSeenIntro: s.hasSeenIntro,
       }),
+      // Clean up phones that already saved the old state.
+      merge: (saved, current) => {
+        const persisted = (saved ?? {}) as Partial<AuthState>;
+        const stale = persisted.status === 'unverified';
+        return {
+          ...current,
+          ...persisted,
+          status: stale ? 'signedOut' : (persisted.status ?? current.status),
+          user: stale ? null : (persisted.user ?? current.user),
+          pendingEmail: null,
+        };
+      },
     }
   )
 );
