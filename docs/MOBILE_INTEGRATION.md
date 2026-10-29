@@ -64,7 +64,7 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 
 **Task**: `title`, `repeat_rule` (`daily|weekdays|weekly|null`; completing a repeating task creates the next occurrence), `notes`, `priority` `High|Medium|Low` → lower-case, `date` (local day), `startTime`/`endTime` → `start_time`/`end_time` (`null` = all day; end defaults to start + 1 h), `repeat`. The server returns `status` (`upcoming|overdue|completed`), `done`, `all_day` and `due_at`, so the client no longer needs to compute overdue.
 
-**Notification**: `kind` (`nudge|summary|streak|insight|system`), `title`, `body`, `read`, `created_at`, `habit_id`. The client chooses the destination screen from `kind`.
+**Notification**: `kind` (`nudge|summary|streak|insight|system|reminder`), `title`, `body`, `read`, `created_at`, `habit_id`, `task_id`. The client chooses the destination screen from `kind`. A `reminder` is sent once, about 10 minutes before a task with a start time (none for all-day tasks); moving the task re-arms it. It respects quiet hours, tone and name settings, and is not counted toward habit nudge limits.
 
 ## Profile photos
 
@@ -130,7 +130,8 @@ make worker            # the nudge worker (separate process)
 ## Known gaps and things to verify
 
 - **Voice with a real key:** both Meta routes (`/v1/asr/transcribe` and the realtime socket) are verified against the live service. Without a key a deterministic fake answers the upload route, and the live socket reports `unavailable` so the app falls back to uploading.
-- **`quiet_allow_priority`** is stored for future task nudges; the engine only nudges habits today.
+- **`quiet_allow_priority`** lets a high-priority task's reminder through quiet hours; habit nudges ignore it.
+- Push delivery needs an EAS project id and a development build; the inbox works without them.
 - Weekly reports arrive as an inbox message (title "Your weekly report") and a Monday-morning push, once the worker runs.
 - Photo extraction uses the multimodal Meta model; with no key the fake client answers, so test it against a real key before demoing.
 - Avatars use Cloudinary once its three keys are set; until then they sit on local disk (single host only). A direct upload the app never attaches is left behind in the `nudge/avatars` folder; clean it with a Cloudinary lifecycle rule if that matters.
