@@ -19,6 +19,7 @@ import json
 import logging
 import random
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -76,6 +77,13 @@ class ModelReply:
         return bool(self.tool_calls)
 
 
+@dataclass(frozen=True, slots=True)
+class Delta:
+    """A piece of the reply text, as the model writes it."""
+
+    text: str
+
+
 class ChatClient(Protocol):
     async def complete(
         self,
@@ -85,6 +93,17 @@ class ChatClient(Protocol):
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.3,
     ) -> ModelReply: ...
+
+    def stream(
+        self,
+        spec: ModelSpec,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.3,
+    ) -> AsyncIterator[Delta | ModelReply]:
+        """The reply as it is written: `Delta`s of text, then the complete `ModelReply` last."""
+        ...
 
 
 # --------------------------------------------------------------------- real
@@ -118,16 +137,13 @@ class MetaClient:
             tier: effort for tier, effort in (reasoning_efforts or {}).items() if effort
         }
 
-    async def complete(
+    def _request(
         self,
         spec: ModelSpec,
         messages: list[dict[str, Any]],
-        *,
-        tools: list[dict[str, Any]] | None = None,
-        temperature: float = 0.3,
-    ) -> ModelReply:
-        import time
-
+        tools: list[dict[str, Any]] | None,
+        temperature: float,
+    ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "model": spec.id,
             "messages": messages,
@@ -139,6 +155,117 @@ class MetaClient:
         effort = self._efforts.get(spec.tier)
         if effort:
             kwargs["extra_body"] = {"reasoning_effort": effort}
+        return kwargs
+
+    async def stream(
+        self,
+        spec: ModelSpec,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.3,
+    ) -> AsyncIterator[Delta | ModelReply]:
+        """Yield text as the model writes it, then the assembled reply.
+
+        Baseten sends small pieces from about one second in; the Meta Model API sends its reply in
+        one or two large chunks at the end. Both work: the pieces are just bigger on Meta. Tool
+        calls arrive as partial JSON spread over chunks and are assembled by index. A retry is only
+        safe before any text has been sent on: after that it would say the same words twice.
+        """
+        import time
+
+        kwargs = self._request(spec, messages, tools, temperature)
+        kwargs["stream"] = True
+        kwargs["stream_options"] = {"include_usage": True}
+
+        last: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            started = time.perf_counter()
+            sent_text = False
+            parts: list[str] = []
+            partial_calls: dict[int, dict[str, str]] = {}
+            usage: Any = None
+            try:
+                response = await self._client.chat.completions.create(**kwargs)
+                async for chunk in response:
+                    if getattr(chunk, "usage", None):
+                        usage = chunk.usage
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    # `reasoning_content` (the model's thinking) is deliberately never read.
+                    piece = getattr(delta, "content", None)
+                    if piece:
+                        parts.append(piece)
+                        sent_text = True
+                        yield Delta(piece)
+                    for tc in getattr(delta, "tool_calls", None) or []:
+                        slot = partial_calls.setdefault(
+                            tc.index, {"id": "", "name": "", "args": ""}
+                        )
+                        if tc.id:
+                            slot["id"] = tc.id
+                        fn = getattr(tc, "function", None)
+                        if fn is not None:
+                            slot["name"] += fn.name or ""
+                            slot["args"] += fn.arguments or ""
+            except Exception as exc:  # noqa: BLE001 — SDK raises a wide family
+                last = exc
+                if sent_text or attempt == self._max_retries or not _is_retryable(exc):
+                    break
+                delay = self._backoff * (2**attempt) * (0.5 + random.random() / 2)  # noqa: S311
+                log.warning(
+                    "model stream to %s failed (attempt %d/%d): %s; retrying in %.2fs",
+                    spec.id,
+                    attempt + 1,
+                    self._max_retries + 1,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+
+            content = "".join(parts).strip()
+            calls = [
+                ToolCall(id=c["id"], name=c["name"], arguments=ToolCall.parse(c["args"]))
+                for _, c in sorted(partial_calls.items())
+            ]
+            completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+            if usage is None:  # a server that didn't report usage: estimate, as the fake does
+                completion_tokens = len(content) // 4
+            prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0) or (
+                sum(len(str(m.get("content", ""))) for m in messages) // 4
+            )
+            if not content and not calls:
+                log.warning(
+                    "%s streamed no answer (completion_tokens=%d)", spec.id, completion_tokens
+                )
+            yield ModelReply(
+                content=content,
+                tool_calls=tuple(calls),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                model_id=spec.id,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                low_confidence=LOW_CONFIDENCE.search(content) is not None,
+            )
+            return
+
+        raise ModelError(
+            f"{spec.id} failed after {self._max_retries + 1} attempts: {last}"
+        ) from last
+
+    async def complete(
+        self,
+        spec: ModelSpec,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.3,
+    ) -> ModelReply:
+        import time
+
+        kwargs = self._request(spec, messages, tools, temperature)
 
         last: Exception | None = None
         for attempt in range(self._max_retries + 1):
@@ -240,6 +367,21 @@ class RoutedClient:
             raise ModelError(f"no client configured for provider {spec.provider!r}") from exc
         return await client.complete(spec, messages, tools=tools, temperature=temperature)
 
+    async def stream(
+        self,
+        spec: ModelSpec,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.3,
+    ) -> AsyncIterator[Delta | ModelReply]:
+        try:
+            client = self._clients[spec.provider]
+        except KeyError as exc:
+            raise ModelError(f"no client configured for provider {spec.provider!r}") from exc
+        async for item in client.stream(spec, messages, tools=tools, temperature=temperature):
+            yield item
+
 
 # --------------------------------------------------------------------- fake
 
@@ -331,6 +473,20 @@ class FakeClient:
             latency_ms=1.0,
             low_confidence=bool(reply.get("low_confidence", False)),
         )
+
+    async def stream(
+        self,
+        spec: ModelSpec,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.3,
+    ) -> AsyncIterator[Delta | ModelReply]:
+        """The scripted reply, a word at a time, then the whole thing (like a fast real model)."""
+        reply = await self.complete(spec, messages, tools=tools, temperature=temperature)
+        for piece in re.findall(r"\S+\s*", reply.content):
+            yield Delta(piece)
+        yield reply
 
 
 # ------------------------------------------------------------------ factory

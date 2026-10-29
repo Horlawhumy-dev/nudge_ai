@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
@@ -23,7 +24,7 @@ from uuid import UUID
 from app.ai import proposals as proposals_mod
 from app.core import metrics
 from app.core.config import get_settings
-from app.models.client import ChatClient, ModelError, cost_of, get_client
+from app.models.client import ChatClient, Delta, ModelError, ModelReply, cost_of, get_client
 from app.models.registry import Tier
 from app.models.router import (
     RouteDecision,
@@ -96,6 +97,18 @@ def _truncate(value: Any, limit: int) -> Any:
     return {"truncated": True, "preview": clipped}
 
 
+@dataclass(frozen=True, slots=True)
+class Reset:
+    """The text streamed so far belongs to a model round that is being followed by another.
+
+    A model may say "Let me check" and then call a tool; once the tool has run, a new round starts
+    and its words replace the earlier ones. Clients clear what they showed when they see this.
+    """
+
+
+TurnEvent = Delta | Reset | TurnResult
+
+
 class Executor:
     def __init__(
         self,
@@ -118,6 +131,38 @@ class Executor:
         requires_planning: bool | None = None,
         expected_tool_calls: int = 0,
     ) -> TurnResult:
+        """The whole turn at once, for callers that don't need the words as they arrive."""
+        result: TurnResult | None = None
+        async for event in self.run_events(
+            user_id=user_id,
+            prompt=prompt,
+            messages=messages,
+            registry=registry,
+            session=session,
+            has_image=has_image,
+            requires_planning=requires_planning,
+            expected_tool_calls=expected_tool_calls,
+        ):
+            if isinstance(event, TurnResult):
+                result = event
+        if result is None:  # run_events always ends with a TurnResult
+            raise RuntimeError("the turn produced no result")
+        return result
+
+    async def run_events(
+        self,
+        *,
+        user_id: UUID,
+        prompt: str,
+        messages: list[dict[str, Any]],
+        registry: ToolRegistry,
+        session: Any,
+        has_image: bool = False,
+        requires_planning: bool | None = None,
+        expected_tool_calls: int = 0,
+    ) -> AsyncIterator[TurnEvent]:
+        """The turn as it happens: `Delta`s of reply text, `Reset` when a later model round
+        replaces earlier words, and the finished `TurnResult` last."""
         s = get_settings()
         max_hops = s.executor_max_hops
         tool_error_streak = 0
@@ -141,20 +186,34 @@ class Executor:
         # Cache hit: no model call, no hop, no spend.
         if decision.cache_hit:
             metrics.route_decisions_total.labels(tier="fast", reason="cache hit").inc()
-            return TurnResult(
+            if decision.cached_reply:
+                yield Delta(decision.cached_reply)
+            yield TurnResult(
                 content=decision.cached_reply or "",
                 tier="fast",
                 model_id="cache",
                 reason=decision.reason,
                 cached=True,
             )
+            return
 
         content = ""
         prompt_tokens = 0
         completion_tokens = 0
         cost_usd = 0.0
+        shown_text = False  # has an earlier round already put words in front of the person?
         for _hop in range(max_hops):
-            reply, call_cost = await self._call(user_id, decision, messages, registry)
+            if shown_text:
+                yield Reset()
+                shown_text = False
+            reply: Any = None
+            call_cost = 0.0
+            async for piece in self._stream_call(user_id, decision, messages, registry):
+                if isinstance(piece, Delta):
+                    shown_text = True
+                    yield piece
+                else:
+                    reply, call_cost = piece
             prompt_tokens += reply.prompt_tokens
             completion_tokens += reply.completion_tokens
             cost_usd += call_cost
@@ -283,7 +342,7 @@ class Executor:
                     tool_error_streak = 0
                     continue
 
-        return TurnResult(
+        yield TurnResult(
             content=content or "I could not produce a reply for that.",
             tier=decision.tier,
             model_id=decision.spec().id if not decision.degraded else decision.spec().id,
@@ -298,23 +357,41 @@ class Executor:
             cost_usd=cost_usd,
         )
 
-    async def _call(
+    async def _stream_call(
         self,
         user_id: UUID,
         decision: RouteDecision,
         messages: list[dict[str, Any]],
         registry: ToolRegistry,
-    ) -> tuple[Any, float]:
-        """Returns the reply and its cost, having charged the budget already."""
+    ) -> AsyncIterator[Delta | tuple[Any, float]]:
+        """One model round: yields `Delta`s as they arrive, then `(reply, cost)` last.
+
+        The budget is charged once, from the finished reply's token counts, exactly as before.
+        """
         spec = decision.spec()
         tools = registry.openai_tools() or None
+        reply: ModelReply | None = None
         try:
-            reply = await self.client.complete(spec, messages, tools=tools)
+            stream = getattr(self.client, "stream", None)
+            if stream is None:  # a client without streaming: one piece, then the reply
+                reply = await self.client.complete(spec, messages, tools=tools)
+                if reply.content:
+                    yield Delta(reply.content)
+            else:
+                async for item in stream(spec, messages, tools=tools):
+                    if isinstance(item, Delta):
+                        yield item
+                    else:
+                        reply = item
         except ModelError as exc:
             # Surface the failure as a reply rather than a 500, and say so plainly.
             log.error("model call failed: %s", exc)
             metrics.model_calls_total.labels(model=spec.id, tier=spec.tier, result="error").inc()
-            return _ErrorReply(f"model unavailable: {exc}"), 0.0
+            yield (_ErrorReply(f"model unavailable: {exc}"), 0.0)
+            return
+        if reply is None:
+            yield (_ErrorReply("model unavailable: the reply ended unexpectedly"), 0.0)
+            return
         cost = cost_of(reply)
         metrics.record_model_call(
             model=spec.id,
@@ -329,7 +406,7 @@ class Executor:
             prompt_tokens=reply.prompt_tokens,
             completion_tokens=reply.completion_tokens,
         )
-        return reply, cost
+        yield (reply, cost)
 
 
 @dataclass(frozen=True, slots=True)

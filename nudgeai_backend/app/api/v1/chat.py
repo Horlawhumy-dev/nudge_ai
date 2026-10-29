@@ -21,6 +21,7 @@ from app.core import metrics
 from app.core.config import get_settings
 from app.db.models import ChatMessage, Preference, ToolProposal
 from app.models.budgets import seconds_until_reset
+from app.models.client import Delta
 from app.models.router import RouteRequest
 from app.services import conversation_service, memory_service, trace_service
 from app.services.core_service import NotFound
@@ -28,7 +29,7 @@ from app.tools import calendar as calendar_tools
 from app.tools import memory as memory_tools
 from app.tools import planner as planner_tools
 from app.tools.base import ToolRegistry
-from app.tools.executor import Executor, TurnResult
+from app.tools.executor import Executor, Reset, TurnResult
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -185,7 +186,10 @@ async def chat(
         result: TurnResult | None = None
         started = time.monotonic()
         try:
-            result = await executor.run(
+            # Words go out as the model writes them, so a client can show (and speak) the start of
+            # the reply while the rest is still being written. The `message` event below still
+            # carries the whole text, so a client that ignores `delta` works exactly as before.
+            async for event in executor.run_events(
                 user_id=user_id,
                 prompt=body.message,
                 messages=messages,
@@ -193,10 +197,19 @@ async def chat(
                 session=session,
                 has_image=body.has_image,
                 requires_planning=body.requires_planning,
-            )
+            ):
+                if isinstance(event, Delta):
+                    yield _sse("delta", {"content": event.text})
+                elif isinstance(event, Reset):
+                    yield _sse("reset", {})
+                else:
+                    result = event
         except Exception as exc:  # noqa: BLE001
             log.exception("chat turn failed")
             yield _sse("error", {"message": str(exc)})
+            return
+        if result is None:  # run_events always ends with a result; fail cleanly if it ever doesn't
+            yield _sse("error", {"message": "the reply ended unexpectedly"})
             return
 
         trace_id: str | None = None
