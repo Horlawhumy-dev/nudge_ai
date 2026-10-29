@@ -27,6 +27,8 @@ export function useLiveVoiceSession() {
   const format = useRef({ sampleRate: SPEECH_SAMPLE_RATE, channels: 1 });
   const paused = useRef(false);
   const limit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // False once the screen is gone, so a late permission prompt or upload doesn't toast over Home.
+  const alive = useRef(true);
 
   const { stream } = useAudioStream({
     sampleRate: SPEECH_SAMPLE_RATE,
@@ -39,13 +41,25 @@ export function useLiveVoiceSession() {
     },
   });
 
+  // The library frees the native stream when this screen unmounts, and stopping one that is
+  // already freed (or was never started) throws. Either way the microphone is off, which is all
+  // we wanted, so that error is safe to ignore.
+  const stopStream = useCallback(() => {
+    try {
+      stream.stop();
+    } catch {
+      // already released or not running
+    }
+  }, [stream]);
+
   const finish = useCallback(async () => {
     clearTimeout(limit.current);
-    stream.stop();
+    stopStream();
     const { sampleRate, channels } = format.current;
     const raw = concatInt16(chunks.current);
     chunks.current = [];
     const samples = resampleInt16(toMono(raw, channels), sampleRate, SPEECH_SAMPLE_RATE);
+    if (!alive.current) return;
     if (samples.length < MIN_SAMPLES) {
       toast.show('I didn’t catch anything. Tap the mic and try again.');
       setPhase('idle');
@@ -57,6 +71,7 @@ export function useLiveVoiceSession() {
     try {
       text = (await speechApi.transcribe(encodeWav(samples, SPEECH_SAMPLE_RATE))).text;
     } catch (e) {
+      if (!alive.current) return;
       // 502 from the server also covers "no speech was recognised".
       toast.error(
         e instanceof ApiError && e.message
@@ -66,14 +81,16 @@ export function useLiveVoiceSession() {
       setPhase('idle');
       return;
     }
+    if (!alive.current) return;
     setHeard(text);
     setPhase('generating');
     await send(text, { via: 'voice' });
     setPhase('idle');
-  }, [send, stream]);
+  }, [send, stopStream]);
 
   const listen = useCallback(async () => {
     const permission = await requestRecordingPermissionsAsync();
+    if (!alive.current) return;
     if (!permission.granted) {
       toast.error('Allow microphone access in Settings to talk to Nudge.');
       setPhase('idle');
@@ -85,21 +102,28 @@ export function useLiveVoiceSession() {
       paused.current = false;
       setHeard('');
       await stream.start();
+      if (!alive.current) {
+        stopStream();
+        return;
+      }
       setPhase('listening');
       limit.current = setTimeout(() => void finish(), MAX_RECORDING_MS);
     } catch {
+      if (!alive.current) return;
       toast.error('Couldn’t start the microphone. Try again.');
       setPhase('idle');
     }
-  }, [finish, stream]);
+  }, [finish, stream, stopStream]);
 
   // Start listening as soon as voice mode opens; always release the microphone on the way out.
   useEffect(() => {
+    alive.current = true;
     const start = setTimeout(() => void listen(), 0);
     return () => {
+      alive.current = false;
       clearTimeout(start);
       clearTimeout(limit.current);
-      stream.stop();
+      stopStream();
     };
     // Only on open/close: `listen` changes identity but must not restart a running session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
