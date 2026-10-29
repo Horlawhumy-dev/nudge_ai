@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     # --- tools ---
     calendar_enabled: bool = False  # deterministic stub until a real credential exists
 
+    # --- task reminders ---
+    # One reminder per task that has a start time, this long before it starts. A reminder that is
+    # late (the worker was down, or quiet hours just ended) still goes out until the task is this
+    # long past its start; after that it would only be noise.
+    task_reminder_lead_minutes: int = 10
+    task_reminder_grace_minutes: int = 30
+
     # --- plans ---
     # What Free includes (the numbers shown on the app's subscription screen). Pro is unlimited.
     free_habit_limit: int = 3

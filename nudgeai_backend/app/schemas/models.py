@@ -569,7 +569,7 @@ class ConversationDetail(BaseModel):
 
 # ========================================================== inbox and devices
 
-NotificationKind = Literal["nudge", "summary", "streak", "insight", "system"]
+NotificationKind = Literal["nudge", "summary", "streak", "insight", "system", "reminder"]
 
 
 class NotificationResponse(BaseModel):
@@ -578,6 +578,8 @@ class NotificationResponse(BaseModel):
     title: str
     body: str
     habit_id: UUID | None
+    # Set on a task reminder, so tapping it can open the task list.
+    task_id: UUID | None = None
     read: bool
     created_at: datetime
 

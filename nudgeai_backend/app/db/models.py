@@ -21,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    text,
     true,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
@@ -297,10 +298,21 @@ class Task(Base):
     )
     repeat_rule: Mapped[str | None] = mapped_column(String(8))
     series_id: Mapped[UUID | None] = mapped_column(PgUUID(as_uuid=True), index=True)
+    # When the "starting soon" reminder went out. Null means it hasn't (so it still may); moving the
+    # task to another time clears it, so the new time gets its own reminder.
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
+        Index(
+            "ix_tasks_pending_reminder",
+            "date",
+            postgresql_where=text(
+                "reminded_at IS NULL AND done_at IS NULL AND deleted_at IS NULL "
+                "AND start_time IS NOT NULL"
+            ),
+        ),
         Index("ix_tasks_user_done", "user_id", "done_at"),
         Index("ix_tasks_user_date", "user_id", "date"),
         CheckConstraint("priority IN ('high','medium','low')", name="ck_tasks_priority"),
@@ -331,6 +343,10 @@ class Nudge(Base):
     habit_id: Mapped[object | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("habits.id", ondelete="CASCADE"), index=True
     )
+    # Set for a "starting soon" reminder about a task (kind "reminder").
+    task_id: Mapped[object | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), index=True
+    )
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(24), default="scheduled", nullable=False)
@@ -355,7 +371,8 @@ class Nudge(Base):
             "status in ('scheduled','sent','snoozed','skipped','failed')", name="ck_nudge_status"
         ),
         CheckConstraint(
-            "kind in ('nudge','summary','streak','insight','system')", name="ck_nudge_kind"
+            "kind in ('nudge','summary','streak','insight','system','reminder')",
+            name="ck_nudge_kind",
         ),
         Index("ix_nudges_user_status", "user_id", "status"),
         Index("ix_nudges_scheduled", "scheduled_for"),

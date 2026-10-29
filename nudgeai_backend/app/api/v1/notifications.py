@@ -37,6 +37,7 @@ def _out(row: Nudge) -> NotificationResponse:
         title=row.title or "Nudge",
         body=row.body or "",
         habit_id=row.habit_id,
+        task_id=row.task_id,
         read=row.read_at is not None,
         created_at=row.sent_at or row.created_at,
     )
