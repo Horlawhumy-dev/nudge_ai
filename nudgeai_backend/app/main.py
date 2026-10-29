@@ -43,6 +43,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        from app.ai import speech as speech_mod
+        from app.ai import tts as tts_mod
+
+        # Long-lived connections to the voice services.
+        await tts_mod.aclose()
+        await speech_mod.aclose()
         await close_redis()
         await dispose_engine()
         log.info("shutdown complete")

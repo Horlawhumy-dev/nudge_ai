@@ -175,6 +175,29 @@ async def test_elevenlabs_errors_become_synthesis_errors_and_never_log_the_text(
         await _elevenlabs().synthesize("hi")
 
 
+async def test_the_elevenlabs_connection_is_reused_between_sentences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh connection per sentence measured at ~1.5 s extra on the first request of a burst."""
+    created: list[int] = []
+
+    def factory(**kw):  # type: ignore[no-untyped-def]
+        created.append(1)
+        return _REAL_CLIENT(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, content=b"MP3")), **kw
+        )
+
+    monkeypatch.setattr(tts.httpx, "AsyncClient", factory)
+    synth = _elevenlabs()
+    for text in ("one", "two", "three"):
+        await synth.synthesize(text)
+    assert len(created) == 1
+    await synth.aclose()
+    await synth.synthesize("four")  # reopened on demand after a close
+    assert len(created) == 2
+    await synth.aclose()
+
+
 async def test_repeated_lines_are_only_paid_for_once() -> None:
     fake = FakeSynthesizer()
     cached = CachedSynthesizer(fake, entries=2, scope="v:m")

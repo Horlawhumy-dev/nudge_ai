@@ -159,26 +159,51 @@ async def test_meta_transcriber_maps_failures_to_speech_error(
 ) -> None:
     real = httpx.AsyncClient
 
-    def install(handler):  # type: ignore[no-untyped-def]
+    def transcriber(handler):  # type: ignore[no-untyped-def]
+        # A transcriber keeps its connection open, so each scenario gets its own with its own fake.
         monkeypatch.setattr(
             speech.httpx,
             "AsyncClient",
             lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
         )
+        return MetaTranscriber("k", model="m", url="https://x/y", timeout=5)
 
-    t = MetaTranscriber("k", model="m", url="https://x/y", timeout=5)
-    install(lambda r: httpx.Response(500))
     with pytest.raises(SpeechError, match="unavailable"):
-        await t.transcribe(WAV, content_type="audio/wav")
-    install(lambda r: httpx.Response(400, text="audio longer than the cap"))
+        await transcriber(lambda r: httpx.Response(500)).transcribe(WAV, content_type="audio/wav")
     with pytest.raises(SpeechError, match="unavailable"):
-        await t.transcribe(WAV, content_type="audio/wav")
-    install(lambda r: httpx.Response(200, content=b"not json"))
+        await transcriber(
+            lambda r: httpx.Response(400, text="audio longer than the cap")
+        ).transcribe(WAV, content_type="audio/wav")
     with pytest.raises(SpeechError, match="unavailable"):
-        await t.transcribe(WAV, content_type="audio/wav")
-    install(lambda r: httpx.Response(200, content=json.dumps({"text": "  "}).encode()))
+        await transcriber(lambda r: httpx.Response(200, content=b"not json")).transcribe(
+            WAV, content_type="audio/wav"
+        )
     with pytest.raises(SpeechError, match="no speech"):
-        await t.transcribe(WAV, content_type="audio/wav")
+        await transcriber(
+            lambda r: httpx.Response(200, content=json.dumps({"text": "  "}).encode())
+        ).transcribe(WAV, content_type="audio/wav")
+
+
+async def test_the_connection_is_reused_between_voice_notes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Opening a new connection per note costs a DNS and TLS handshake every time."""
+    real = httpx.AsyncClient
+    created: list[int] = []
+
+    def factory(**kw):  # type: ignore[no-untyped-def]
+        created.append(1)
+        return real(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"transcript": "hi"})),
+            **kw,
+        )
+
+    monkeypatch.setattr(speech.httpx, "AsyncClient", factory)
+    t = MetaTranscriber("k", model="m", url="https://x/y", timeout=5)
+    for _ in range(3):
+        assert (await t.transcribe(WAV, content_type="audio/wav")).text == "hi"
+    assert len(created) == 1
+    await t.aclose()
 
 
 def test_default_url_derives_from_the_meta_base(monkeypatch: pytest.MonkeyPatch) -> None:

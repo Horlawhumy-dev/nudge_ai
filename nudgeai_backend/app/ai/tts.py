@@ -51,17 +51,29 @@ class ElevenLabsSynthesizer:
     ) -> None:
         self._key, self._voice, self._model = api_key, voice_id, model_id
         self._base, self._timeout = base_url.rstrip("/"), timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _http(self) -> httpx.AsyncClient:
+        """One connection kept open between requests. Opening a fresh one (DNS, TLS) for every
+        spoken sentence measured at about 1.5 s extra on the first request of each burst."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def synthesize(self, text: str) -> Audio:
         url = f"{self._base}/v1/text-to-speech/{self._voice}"
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as http:
-                resp = await http.post(
-                    url,
-                    params={"output_format": OUTPUT_FORMAT},
-                    headers={"xi-api-key": self._key, "Accept": CONTENT_TYPE},
-                    json={"text": text, "model_id": self._model},
-                )
+            resp = await self._http().post(
+                url,
+                params={"output_format": OUTPUT_FORMAT},
+                headers={"xi-api-key": self._key, "Accept": CONTENT_TYPE},
+                json={"text": text, "model_id": self._model},
+            )
         except httpx.HTTPError as exc:
             log.warning("elevenlabs request failed: %s", exc)
             raise SynthesisError("voice output is unavailable right now") from exc
@@ -93,6 +105,11 @@ class CachedSynthesizer:
 
     def _key(self, text: str) -> str:
         return hashlib.sha256(f"{self._scope}\0{text}".encode()).hexdigest()
+
+    async def aclose(self) -> None:
+        close = getattr(self._inner, "aclose", None)
+        if close is not None:
+            await close()
 
     async def synthesize(self, text: str) -> Audio:
         key = self._key(text)
@@ -137,3 +154,11 @@ def set_synthesizer(synthesizer: Synthesizer | None) -> None:
     """Override the synthesizer (tests install a fake)."""
     global _synthesizer
     _synthesizer = synthesizer
+
+
+async def aclose() -> None:
+    """Close the long-lived connection (app shutdown)."""
+    global _synthesizer
+    close = getattr(_synthesizer, "aclose", None)
+    if close is not None:
+        await close()

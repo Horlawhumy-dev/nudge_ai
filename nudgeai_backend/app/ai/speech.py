@@ -70,6 +70,18 @@ def extract_text(payload: object) -> tuple[str, str | None]:
 class MetaTranscriber:
     def __init__(self, api_key: str, *, model: str, url: str, timeout: float) -> None:
         self._key, self._model, self._url, self._timeout = api_key, model, url, timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _http(self) -> httpx.AsyncClient:
+        """Kept open between voice notes, so each one skips the DNS and TLS handshake."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def transcribe(self, audio: bytes, *, content_type: str) -> Transcript:
         model = self._model or DEFAULT_VOICE_MODEL
@@ -80,18 +92,15 @@ class MetaTranscriber:
             "audio": ("voice-note.wav", audio, "audio/wav"),
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as http:
-                resp = await http.post(
-                    self._url, headers={"Authorization": f"Bearer {self._key}"}, files=files
-                )
-                if resp.status_code != 200:
-                    # Meta's reason ("audio longer than 10 minutes", "malformed request"...) is
-                    # what makes a failure fixable, so keep it in the log.
-                    log.warning(
-                        "muse voice transcribe: HTTP %s: %s", resp.status_code, resp.text[:300]
-                    )
-                    raise SpeechError("transcription is unavailable right now")
-                text, language = extract_text(resp.json())
+            resp = await self._http().post(
+                self._url, headers={"Authorization": f"Bearer {self._key}"}, files=files
+            )
+            if resp.status_code != 200:
+                # Meta's reason ("audio longer than 10 minutes", "malformed request"...) is
+                # what makes a failure fixable, so keep it in the log.
+                log.warning("muse voice transcribe: HTTP %s: %s", resp.status_code, resp.text[:300])
+                raise SpeechError("transcription is unavailable right now")
+            text, language = extract_text(resp.json())
         except SpeechError:
             raise
         except (httpx.HTTPError, ValueError) as exc:
@@ -139,3 +148,10 @@ def set_transcriber(transcriber: Transcriber | None) -> None:
     """Override the transcriber (tests install a scripted one)."""
     global _transcriber
     _transcriber = transcriber
+
+
+async def aclose() -> None:
+    """Close the long-lived connection (app shutdown)."""
+    close = getattr(_transcriber, "aclose", None)
+    if close is not None:
+        await close()
