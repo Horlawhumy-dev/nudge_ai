@@ -4,10 +4,13 @@ import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
 import { BackButton, Button, Screen, Text } from '@/components/ui';
 import { Checkbox } from '@/features/habits/components/Checkbox';
+import { FREE_HABIT_LIMIT } from '@/features/habits/constants';
+import { habitRoom } from '@/features/habits/utils';
 import { DEFAULT_SELECTED, suggestHabits } from '@/features/onboarding/suggestions';
 import { haptics } from '@/lib/haptics';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { toast } from '@/store/useToastStore';
 import { colors, radius } from '@/theme';
 
@@ -16,17 +19,30 @@ export default function StarterHabits() {
   const router = useRouter();
   const goals = useOnboardingStore((s) => s.goals);
   const addHabit = useHabitsStore((s) => s.addHabit);
+  const existing = useHabitsStore((s) => s.habits.length);
+  const plan = usePreferencesStore((s) => s.plan);
+  // The Free plan holds 3 habits; the server refuses more, so stop the selection there instead
+  // of letting someone tick ten and fail on seven.
+  const room = habitRoom(plan, existing);
   const suggestions = suggestHabits(goals);
   const [selected, setSelected] = useState<string[]>(() =>
     suggestHabits(goals)
-      .slice(0, DEFAULT_SELECTED)
+      .slice(0, Math.min(DEFAULT_SELECTED, room))
       .map((s) => s.id)
   );
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    if (!selected.includes(id) && selected.length >= room) {
+      haptics.warning();
+      toast.show(
+        `Free includes ${FREE_HABIT_LIMIT} habits. Untick one to pick another, or get Pro for more.`
+      );
+      return;
+    }
     setSelected((current) =>
       current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
     );
+  };
 
   const next = () => router.replace('/onboarding/ready');
 
@@ -65,6 +81,11 @@ export default function StarterHabits() {
         <Text variant="bodyLarge" color={colors.textSecondary} style={styles.subtitle}>
           Based on what you’re working on. Pick the ones you’d like, you can change them anytime.
         </Text>
+        {Number.isFinite(room) ? (
+          <Text variant="caption" color={colors.textMuted} style={styles.limit}>
+            {selected.length} of {room} selected · Free includes {FREE_HABIT_LIMIT} habits
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.list}>
@@ -104,6 +125,7 @@ export default function StarterHabits() {
 const styles = StyleSheet.create({
   heading: { marginTop: 28, marginBottom: 24 },
   subtitle: { marginTop: 8 },
+  limit: { marginTop: 10 },
   list: { gap: 12 },
   card: {
     flexDirection: 'row',

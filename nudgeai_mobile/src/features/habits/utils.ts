@@ -1,5 +1,6 @@
 import { addDays, dateKey, type DateKey } from '@/lib/date';
 
+import { FREE_HABIT_LIMIT } from './constants';
 import type { Habit } from './types';
 
 /** Progress is counted over the last 7 days, today included. */
@@ -62,4 +63,9 @@ export function completedCount(habits: readonly Habit[], now: Date = new Date())
 
 export function allDoneToday(habits: readonly Habit[], now: Date = new Date()): boolean {
   return habits.length > 0 && completedCount(habits, now) === habits.length;
+}
+
+/** How many more habits the plan allows (Infinity on Pro). Free is capped, and the server enforces it. */
+export function habitRoom(plan: 'free' | 'pro', existing: number): number {
+  return plan === 'pro' ? Number.POSITIVE_INFINITY : Math.max(0, FREE_HABIT_LIMIT - existing);
 }

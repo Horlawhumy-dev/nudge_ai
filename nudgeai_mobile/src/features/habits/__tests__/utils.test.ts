@@ -6,6 +6,7 @@ import {
   completedCount,
   daysDone,
   habitProgress,
+  habitRoom,
   habitStreak,
   isDoneToday,
   weekDots,
@@ -49,5 +50,18 @@ describe('habit utils', () => {
     expect(completedCount(habits, now)).toBe(2);
     expect(allDoneToday(habits, now)).toBe(false);
     expect(allDoneToday([], now)).toBe(false);
+  });
+});
+
+describe('habitRoom', () => {
+  it('lets Free hold three habits, counting the ones already there', () => {
+    expect(habitRoom('free', 0)).toBe(3);
+    expect(habitRoom('free', 2)).toBe(1);
+    expect(habitRoom('free', 3)).toBe(0);
+    expect(habitRoom('free', 7)).toBe(0); // never negative
+  });
+
+  it('has no limit on Pro', () => {
+    expect(habitRoom('pro', 50)).toBe(Number.POSITIVE_INFINITY);
   });
 });
