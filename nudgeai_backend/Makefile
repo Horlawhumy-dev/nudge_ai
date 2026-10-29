@@ -2,9 +2,11 @@
 
 # Bind address. Use `make run HOST=0.0.0.0` so a phone on your Wi-Fi can reach the API.
 HOST ?= 127.0.0.1
+# Your reserved ngrok domain, e.g. NGROK_DOMAIN=your-name.ngrok-free.app
+NGROK_DOMAIN ?=
 TEST_DATABASE_URL ?= postgresql+psycopg://haroffcode@/nudgeai_test?host=/var/run/postgresql
 
-.PHONY: install run worker worker-once test lint format format-check mypy check db-migrate clean help
+.PHONY: install tunnel run worker worker-once test lint format format-check mypy check db-migrate clean help
 
 install: ## Create the virtualenv and install the app with its dev tools
 	python3 -m venv .venv
@@ -12,6 +14,10 @@ install: ## Create the virtualenv and install the app with its dev tools
 
 run: ## Run the API on :8079 (HOST=0.0.0.0 to reach it from a phone)
 	.venv/bin/uvicorn app.main:app --host $(HOST) --port 8079
+
+tunnel: ## Expose the API at https://$(NGROK_DOMAIN) (make tunnel NGROK_DOMAIN=...); keep `make run` going too
+	@test -n "$(NGROK_DOMAIN)" || (echo "Usage: make tunnel NGROK_DOMAIN=<your-name>.ngrok-free.app" && exit 1)
+	ngrok http --url=$(NGROK_DOMAIN) 8079
 
 worker: ## Run the nudge worker loop (separate terminal)
 	.venv/bin/python -m app.engine.worker
