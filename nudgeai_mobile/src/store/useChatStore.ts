@@ -22,16 +22,24 @@ import { useHabitsStore } from './useHabitsStore';
 import { useTasksStore } from './useTasksStore';
 import { toast } from './useToastStore';
 
+export type SendOptions = {
+  promptEmoji?: string;
+  via?: ChatVia;
+  /** Each piece of the reply as it is written (for speaking it while it is still coming). */
+  onDelta?: (piece: string) => void;
+  /** A later model round is replacing the words so far (they were a lead-in to a tool call). */
+  onReset?: () => void;
+};
+
 type ChatState = {
   conversations: Conversation[];
   /** The conversation being shown; null means a fresh, empty chat. */
   activeId: string | null;
   /** True while the assistant "thinks"; drives the typing indicator. */
   isReplying: boolean;
-  send: (
-    text: string,
-    options?: { promptEmoji?: string; via?: ChatVia }
-  ) => Promise<ChatMessage | null>;
+  /** True from the first word of a reply to its end: the reply is on screen and still growing. */
+  streaming: boolean;
+  send: (text: string, options?: SendOptions) => Promise<ChatMessage | null>;
   /** Read tasks off a photo; the assistant answers with confirm-gated proposals. */
   sendPhoto: (uri: string) => Promise<void>;
   /** Resend the message a failed reply was answering. */
@@ -83,13 +91,29 @@ async function answerFromServer(
   get: Get,
   localId: string,
   text: string,
-  via: ChatVia
+  via: ChatVia,
+  hooks: Pick<SendOptions, 'onDelta' | 'onReset'> = {}
 ): Promise<ChatMessage | null> {
   const edit = (change: (c: Conversation) => Conversation) =>
     set((s) => ({ conversations: s.conversations.map((c) => (c.id === localId ? change(c) : c)) }));
   const reply: ChatMessage = { id: createId('msg'), role: 'assistant', text: '', via };
   const fail = (message: string): ChatMessage => ({ ...reply, text: message, failed: true });
   let result: ChatMessage | null = null;
+
+  // The reply goes on screen with its first word and grows in place; the closing event then
+  // replaces it with the finished version (same id), so nothing flickers or appears twice.
+  let placed = false;
+  const showText = () =>
+    edit((c) => ({
+      ...c,
+      messages: c.messages.map((m) => (m.id === reply.id ? { ...m, text: reply.text } : m)),
+    }));
+  const place = () => {
+    if (placed) return;
+    placed = true;
+    edit((c) => ({ ...c, messages: [...c.messages, { ...reply }] }));
+    set(() => ({ streaming: true }));
+  };
 
   try {
     await streamChat(
@@ -102,6 +126,17 @@ async function answerFromServer(
         const d = (data ?? {}) as Record<string, unknown>;
         if (event === 'conversation') {
           edit((c) => ({ ...c, serverId: String(d.id), title: String(d.title ?? '') || c.title }));
+        } else if (event === 'delta') {
+          const piece = String(d.content ?? '');
+          if (!piece) return;
+          reply.text += piece;
+          if (placed) showText();
+          else place();
+          hooks.onDelta?.(piece);
+        } else if (event === 'reset') {
+          reply.text = '';
+          if (placed) showText();
+          hooks.onReset?.();
         } else if (event === 'message') {
           reply.text = String(d.content ?? '');
         } else if (event === 'proposal') {
@@ -133,8 +168,14 @@ async function answerFromServer(
     );
   }
 
-  edit((c) => ({ ...c, messages: [...c.messages, result as ChatMessage] }));
-  set(() => ({ isReplying: false }));
+  const finished = result as ChatMessage;
+  edit((c) => ({
+    ...c,
+    messages: placed
+      ? c.messages.map((m) => (m.id === finished.id ? finished : m))
+      : [...c.messages, finished],
+  }));
+  set(() => ({ isReplying: false, streaming: false }));
   return result;
 }
 
@@ -144,6 +185,7 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       activeId: null,
       isReplying: false,
+      streaming: false,
 
       send: async (text, options = {}) => {
         const trimmed = text.trim();
@@ -177,7 +219,7 @@ export const useChatStore = create<ChatState>()(
           }));
         }
 
-        if (!DEMO_MODE) return await answerFromServer(set, get, id, trimmed, via);
+        if (!DEMO_MODE) return await answerFromServer(set, get, id, trimmed, via, options);
 
         await sleep(via === 'voice' ? REPLY_DELAY_MS * 2 : REPLY_DELAY_MS);
         const reply = buildReply(trimmed, via);
@@ -337,7 +379,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
       deleteAll: () => {
-        set({ conversations: [], activeId: null, isReplying: false });
+        set({ conversations: [], activeId: null, isReplying: false, streaming: false });
         if (!DEMO_MODE) {
           conversationsApi
             .removeAll()
@@ -346,7 +388,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       seedDemo: () => set({ conversations: buildSeedConversations(), activeId: null }),
-      clear: () => set({ conversations: [], activeId: null, isReplying: false }),
+      clear: () => set({ conversations: [], activeId: null, isReplying: false, streaming: false }),
     }),
     {
       name: 'nudge.chat',

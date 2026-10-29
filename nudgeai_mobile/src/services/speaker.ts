@@ -15,6 +15,8 @@ export type Speaking = { stop: () => void };
 export type SpeechSession = Speaking & {
   /** More of the reply. Sentences are spoken as soon as they are complete. */
   push: (piece: string) => void;
+  /** Speak what has arrived so far even if its last sentence isn't finished (a lead-in like "Let me check."). */
+  flush: () => void;
   /** No more text is coming; speak what is left. */
   end: () => void;
 };
@@ -204,6 +206,11 @@ export function startSpeech(options: Options = {}): SpeechSession {
     push: (piece) => {
       if (stopped || ended) return;
       buffer.push(piece).forEach(enqueue);
+    },
+    flush: () => {
+      if (stopped || ended) return;
+      const rest = buffer.flush();
+      if (rest) enqueue(rest);
     },
     end: () => {
       if (stopped || ended) return;

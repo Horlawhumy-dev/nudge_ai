@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ToneId } from '@/features/onboarding/data';
-import { speak, type Speaking } from '@/services/speaker';
+import { startSpeech, type SpeechSession } from '@/services/speaker';
 
 /**
- * Speak text aloud and know whether it's still going. Speaking again replaces the current
- * line, and leaving the screen cuts it off.
+ * Speak aloud and know whether it's still going. Starting again replaces the current speech, and
+ * leaving the screen cuts it off. `say` speaks a finished text; `begin` returns a session to feed
+ * with text as it arrives, so the first sentence is heard while the rest is still being written.
  */
 export function useSpeaker() {
   const [speaking, setSpeaking] = useState(false);
-  const current = useRef<Speaking | null>(null);
+  const current = useRef<SpeechSession | null>(null);
   const alive = useRef(true);
 
   const stop = useCallback(() => {
@@ -18,23 +19,29 @@ export function useSpeaker() {
     setSpeaking(false);
   }, []);
 
-  const say = useCallback(
-    async (text: string, tone?: ToneId) => {
+  const begin = useCallback(
+    (tone?: ToneId): SpeechSession => {
       stop();
       setSpeaking(true);
-      const handle = await speak(text, {
+      const session = startSpeech({
         tone,
         onEnd: () => {
-          if (alive.current) setSpeaking(false);
+          if (alive.current && current.current === session) setSpeaking(false);
         },
       });
-      if (!alive.current) {
-        handle.stop();
-        return;
-      }
-      current.current = handle;
+      current.current = session;
+      return session;
     },
     [stop]
+  );
+
+  const say = useCallback(
+    (text: string, tone?: ToneId) => {
+      const session = begin(tone);
+      session.push(text);
+      session.end();
+    },
+    [begin]
   );
 
   useEffect(() => {
@@ -45,5 +52,5 @@ export function useSpeaker() {
     };
   }, []);
 
-  return { speaking, say, stop };
+  return { speaking, say, begin, stop };
 }

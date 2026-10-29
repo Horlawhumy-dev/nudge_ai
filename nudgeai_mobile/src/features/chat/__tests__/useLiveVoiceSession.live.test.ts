@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { speechApi } from '@/services/api/endpoints/speech';
 import { openLiveTranscription, type LiveCallbacks } from '@/services/liveTranscribe';
-import { speak } from '@/services/speaker';
+import { startSpeech } from '@/services/speaker';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
 import { liveWait, useLiveVoiceSession } from '../useLiveVoiceSession';
@@ -20,7 +20,7 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn(async () => undefined),
 }));
 jest.mock('@/services/api/endpoints/speech');
-jest.mock('@/services/speaker', () => ({ speak: jest.fn() }));
+jest.mock('@/services/speaker', () => ({ startSpeech: jest.fn() }));
 jest.mock('@/services/liveTranscribe', () => ({ openLiveTranscription: jest.fn() }));
 jest.mock('@/store/useChatStore', () => ({
   useChatStore: (select: (s: { send: typeof mockSend }) => unknown) => select({ send: mockSend }),
@@ -30,6 +30,7 @@ const open = jest.mocked(openLiveTranscription);
 const transcribe = jest.mocked(speechApi.transcribe);
 
 const session = { sendAudio: jest.fn(), stop: jest.fn(), close: jest.fn() };
+const speechSession = { push: jest.fn(), flush: jest.fn(), end: jest.fn(), stop: jest.fn() };
 const callbacks = (): LiveCallbacks => open.mock.calls[open.mock.calls.length - 1][0];
 const audio = (samples = 16_000, rate = 16_000, channels = 1) => ({
   data: new Int16Array(samples).fill(500).buffer,
@@ -51,7 +52,7 @@ beforeEach(() => {
   audioModule.setAudioModeAsync.mockResolvedValue(undefined);
   mockStream.start.mockResolvedValue(undefined);
   mockSend.mockResolvedValue({ id: 'r', role: 'assistant', text: 'Done, added.' });
-  jest.mocked(speak).mockResolvedValue({ stop: jest.fn() });
+  jest.mocked(startSpeech).mockReturnValue(speechSession);
   open.mockReturnValue(session);
   usePreferencesStore.getState().reset();
   liveWait.heardMs = 40;
@@ -94,11 +95,15 @@ describe('live voice session', () => {
     await act(async () => callbacks().onTurn('push my deep work to 11 am please'));
     await waitFor(() => expect(result.current.phase).toBe('idle'));
 
-    expect(mockSend).toHaveBeenCalledWith('push my deep work to 11 am please', { via: 'voice' });
+    expect(mockSend).toHaveBeenCalledWith(
+      'push my deep work to 11 am please',
+      expect.objectContaining({ via: 'voice' })
+    );
     expect(transcribe).not.toHaveBeenCalled(); // nothing was uploaded
     expect(mockStream.stop).toHaveBeenCalled(); // the microphone is off
     expect(session.close).toHaveBeenCalled();
-    expect(speak).toHaveBeenCalledWith('Done, added.', expect.anything()); // and it answers aloud
+    expect(speechSession.push).toHaveBeenCalledWith('Done, added.'); // and it answers aloud
+    expect(speechSession.end).toHaveBeenCalled();
   });
 
   it('ignores a "sentence" that is only noise and keeps listening', async () => {
@@ -116,7 +121,7 @@ describe('live voice session', () => {
     expect(session.stop).toHaveBeenCalled();
     await act(async () => callbacks().onTurn('buy milk'));
     await waitFor(() => expect(result.current.phase).toBe('idle'));
-    expect(mockSend).toHaveBeenCalledWith('buy milk', { via: 'voice' });
+    expect(mockSend).toHaveBeenCalledWith('buy milk', expect.objectContaining({ via: 'voice' }));
     expect(transcribe).not.toHaveBeenCalled();
   });
 
@@ -126,7 +131,12 @@ describe('live voice session', () => {
     await act(async () => callbacks().onPartial('hello')); // it heard something, so it waits longer
     await act(async () => mockOnBuffer(audio()));
     await act(async () => result.current.toggleMic());
-    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('uploaded words', { via: 'voice' }));
+    await waitFor(() =>
+      expect(mockSend).toHaveBeenCalledWith(
+        'uploaded words',
+        expect.objectContaining({ via: 'voice' })
+      )
+    );
     expect(transcribe).toHaveBeenCalledTimes(1);
   });
 
@@ -137,7 +147,12 @@ describe('live voice session', () => {
     await act(async () => callbacks().onFail('closed'));
     await act(async () => result.current.toggleMic());
     expect(session.stop).not.toHaveBeenCalled(); // no live session to ask
-    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('uploaded words', { via: 'voice' }));
+    await waitFor(() =>
+      expect(mockSend).toHaveBeenCalledWith(
+        'uploaded words',
+        expect.objectContaining({ via: 'voice' })
+      )
+    );
   });
 
   it('uploads when live is not available at all (demo mode or no login)', async () => {
@@ -146,7 +161,12 @@ describe('live voice session', () => {
     const { result } = await listening();
     await act(async () => mockOnBuffer(audio()));
     await act(async () => result.current.toggleMic());
-    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('uploaded words', { via: 'voice' }));
+    await waitFor(() =>
+      expect(mockSend).toHaveBeenCalledWith(
+        'uploaded words',
+        expect.objectContaining({ via: 'voice' })
+      )
+    );
   });
 
   it('hangs up the live connection when the screen closes', async () => {

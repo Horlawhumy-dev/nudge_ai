@@ -234,4 +234,89 @@ describe('chat against a backend', () => {
     await useChatStore.getState().sendPhoto('file:///blurry.jpg');
     expect(active().messages[3].text).toMatch(/clearer/);
   });
+
+  describe('a reply that streams in', () => {
+    const texts = () => active().messages.map((m) => m.text);
+
+    it('appears with the first word, grows in place, and is finalised without a duplicate', async () => {
+      const seen: { texts: string[]; streaming: boolean; replying: boolean }[] = [];
+      const snap = () =>
+        seen.push({
+          texts: texts(),
+          streaming: useChatStore.getState().streaming,
+          replying: useChatStore.getState().isReplying,
+        });
+      stream.mockImplementation(async (_body, onEvent) => {
+        onEvent({ event: 'conversation', data: { id: 'srv', title: 't' } });
+        onEvent({ event: 'delta', data: { content: 'Okay, ' } });
+        snap();
+        onEvent({ event: 'delta', data: { content: 'I added it.' } });
+        snap();
+        onEvent({ event: 'message', data: { content: 'Okay, I added it.' } });
+        onEvent({ event: 'meta', data: { trace_id: 'tr-9' } });
+      });
+
+      const reply = await useChatStore.getState().send('book it', { via: 'voice' });
+
+      expect(seen[0]).toEqual({ texts: ['book it', 'Okay, '], streaming: true, replying: true });
+      expect(seen[1].texts).toEqual(['book it', 'Okay, I added it.']);
+      // finished: the same bubble, finalised with the trace, and nothing duplicated
+      expect(texts()).toEqual(['book it', 'Okay, I added it.']);
+      expect(active().messages[1].id).toBe(reply?.id);
+      expect(active().messages[1].traceId).toBe('tr-9');
+      expect(useChatStore.getState()).toMatchObject({ streaming: false, isReplying: false });
+    });
+
+    it('hands every piece to the caller, and tells it when earlier words are replaced', async () => {
+      const pieces: string[] = [];
+      const resets: number[] = [];
+      stream.mockImplementation(async (_body, onEvent) => {
+        onEvent({ event: 'delta', data: { content: 'Let me check.' } });
+        onEvent({ event: 'reset', data: {} });
+        onEvent({ event: 'delta', data: { content: 'You are free.' } });
+        onEvent({ event: 'message', data: { content: 'You are free.' } });
+      });
+      await useChatStore.getState().send('plan my day', {
+        onDelta: (p) => pieces.push(p),
+        onReset: () => resets.push(pieces.length),
+      });
+      expect(pieces).toEqual(['Let me check.', 'You are free.']);
+      expect(resets).toEqual([1]); // the reset came after the first piece
+      expect(texts()).toEqual(['plan my day', 'You are free.']); // only the real answer remains
+    });
+
+    it('clears the lead-in on screen when the answer starts', async () => {
+      const shown: string[] = [];
+      stream.mockImplementation(async (_body, onEvent) => {
+        onEvent({ event: 'delta', data: { content: 'Let me check.' } });
+        shown.push(texts()[1]);
+        onEvent({ event: 'reset', data: {} });
+        shown.push(texts()[1]);
+        onEvent({ event: 'delta', data: { content: 'All clear.' } });
+        shown.push(texts()[1]);
+        onEvent({ event: 'message', data: { content: 'All clear.' } });
+      });
+      await useChatStore.getState().send('plan my day');
+      expect(shown).toEqual(['Let me check.', '', 'All clear.']);
+    });
+
+    it('turns a half-written reply into an honest failure in the same bubble', async () => {
+      stream.mockImplementation(async (_body, onEvent) => {
+        onEvent({ event: 'delta', data: { content: 'Sure, I can' } });
+        throw new ApiError('offline', 0);
+      });
+      await useChatStore.getState().send('hello');
+      expect(active().messages).toHaveLength(2); // not two assistant bubbles
+      expect(active().messages[1]).toMatchObject({ failed: true });
+      expect(active().messages[1].text).toMatch(/connection/);
+      expect(useChatStore.getState().streaming).toBe(false);
+    });
+
+    it('still works with a server that sends the reply only at the end', async () => {
+      serverSays([{ event: 'message', data: { content: 'All good.' } }]);
+      await useChatStore.getState().send('hello');
+      expect(texts()).toEqual(['hello', 'All good.']);
+      expect(useChatStore.getState().streaming).toBe(false);
+    });
+  });
 });

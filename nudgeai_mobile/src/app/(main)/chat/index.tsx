@@ -22,6 +22,7 @@ export default function Chat() {
   const messages = useChatStore(selectMessages);
   const startNew = useChatStore((s) => s.startNew);
   const isReplying = useChatStore((s) => s.isReplying);
+  const streaming = useChatStore((s) => s.streaming);
   const send = useChatStore((s) => s.send);
   const sendPhoto = useChatStore((s) => s.sendPhoto);
   const [draft, setDraft] = useState('');
@@ -112,7 +113,7 @@ export default function Chat() {
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => <MessageBubble message={item} />}
           ItemSeparatorComponent={Gap}
-          ListFooterComponent={isReplying ? <TypingIndicator /> : null}
+          ListFooterComponent={isReplying && !streaming ? <TypingIndicator /> : null}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

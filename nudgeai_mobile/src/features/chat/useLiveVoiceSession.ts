@@ -38,7 +38,7 @@ export function useLiveVoiceSession() {
   // "Voice" in notification settings: when off, replies stay silent text.
   const readRepliesAloud = usePreferencesStore((s) => s.notifications.voice);
   const tone = usePreferencesStore((s) => s.tone);
-  const { say, stop: stopSpeaking } = useSpeaker();
+  const { begin, stop: stopSpeaking } = useSpeaker();
   const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [heard, setHeard] = useState('');
   // The phase also lives in a ref, because callbacks from the live connection outlive renders.
@@ -94,23 +94,39 @@ export function useLiveVoiceSession() {
     live.current = null;
   }, []);
 
-  /** Send what was said to the assistant, then read its reply aloud. */
+  /** Send what was said to the assistant, and speak its reply while it is still being written. */
   const submitText = useCallback(
     async (text: string) => {
       if (!alive.current) return;
       setHeard(text);
       setPhase('generating');
-      const reply = await send(text, { via: 'voice' });
+      // Each sentence is voiced as soon as it is complete, so Nudge starts talking after the first
+      // one rather than after the whole reply.
+      const speech = readRepliesAloud ? begin(tone) : null;
+      let streamed = false;
+      const reply = await send(text, {
+        via: 'voice',
+        onDelta: (piece) => {
+          streamed = true;
+          speech?.push(piece);
+        },
+        // A lead-in like "Let me check." is about to be replaced by the real answer: say it first.
+        onReset: () => speech?.flush(),
+      });
       setPhase('idle');
-      if (!reply || reply.failed || !alive.current) return;
-      if (readRepliesAloud) {
-        void say(reply.text, tone);
+      if (!reply || reply.failed || !alive.current) {
+        speech?.stop(); // never read an error message out loud
+        return;
+      }
+      if (speech) {
+        if (!streamed) speech.push(reply.text); // a server that doesn't stream: say it all now
+        speech.end();
       } else if (!toldVoiceIsOff.current) {
         toldVoiceIsOff.current = true;
         toast.show('Spoken replies are off. Turn on “Voice” in Settings → Notifications.');
       }
     },
-    [send, say, tone, readRepliesAloud, setPhase]
+    [send, begin, tone, readRepliesAloud, setPhase]
   );
 
   /** The fallback: upload the whole recording and wait for the transcript. */
