@@ -72,11 +72,10 @@ class HistoryOut(BaseModel):
 
 def _build_registry(user_id: UUID, session: Any) -> ToolRegistry:
     registry = ToolRegistry()
-    for factory in (
-        *memory_tools.default_tools(),
-        *calendar_tools.default_tools(),
-        *planner_tools.default_tools(),
-    ):
+    # A tool that cannot work must not be offered: the model tries it first, it fails, and the
+    # turn pays for a whole extra model round trip (about 2.5 s) before it gets on with the job.
+    calendar = calendar_tools.default_tools() if get_settings().calendar_enabled else []
+    for factory in (*memory_tools.default_tools(), *calendar, *planner_tools.default_tools()):
         registry.register(factory(), user_id, session)
     return registry
 

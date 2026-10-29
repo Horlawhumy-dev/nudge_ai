@@ -497,3 +497,25 @@ def test_fake_client_is_scripted_by_substring() -> None:
     assert reply.content == "found it"
     assert reply.prompt_tokens > 0
     assert json.dumps({"ok": True})
+
+
+async def test_the_calendar_tool_is_only_offered_when_the_calendar_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tool that always fails costs a wasted model round trip on most booking requests."""
+    from uuid import uuid4
+
+    from app.api.v1.chat import _build_registry
+    from app.core.config import get_settings
+
+    def offered() -> set[str]:
+        tools = _build_registry(uuid4(), None).openai_tools()
+        return {t["function"]["name"] for t in tools}
+
+    monkeypatch.setattr(get_settings(), "calendar_enabled", False)
+    off = offered()
+    assert "calendar_free_busy" not in off
+    assert {"task_create", "tasks_list", "habit_create"} <= off  # everything else stays
+
+    monkeypatch.setattr(get_settings(), "calendar_enabled", True)
+    assert "calendar_free_busy" in offered()
