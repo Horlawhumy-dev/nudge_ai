@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, Field
 
-from app.ai import speech
+from app.ai import speech, tts
 from app.api.deps import CurrentUser
 from app.api.limits import rate_limit
 from app.core.config import get_settings
@@ -58,3 +58,38 @@ async def transcribe(request: Request, user: CurrentUser) -> TranscribeResponse:
     except speech.SpeechError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return TranscribeResponse(text=result.text, model=result.model, language=result.language)
+
+
+class SynthesizeRequest(BaseModel):
+    # The cap is enforced per request below, from settings, so it follows configuration.
+    text: str = Field(min_length=1)
+
+
+@router.post(
+    "/synthesize",
+    response_class=Response,
+    responses={200: {"content": {"audio/mpeg": {}}}},
+    dependencies=[
+        Depends(rate_limit("tts", limit_setting="rate_limit_tts_per_minute", window_seconds=60))
+    ],
+)
+async def synthesize(body: SynthesizeRequest, user: CurrentUser) -> Response:
+    """Speak a short piece of text. Returns MP3 audio; 503 when spoken output is not set up."""
+    text = " ".join(body.text.split())
+    if not text:
+        raise HTTPException(status_code=422, detail="nothing to say")
+    limit = get_settings().tts_max_chars
+    if len(text) > limit:
+        raise HTTPException(status_code=413, detail=f"text is longer than {limit} characters")
+    try:
+        audio = await tts.get_synthesizer().synthesize(text)
+    except tts.NotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except tts.SynthesisError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(
+        content=audio.data,
+        media_type=audio.content_type,
+        # The audio is generated for this exact text, so it is safe for the phone to keep a copy.
+        headers={"Cache-Control": "private, max-age=86400"},
+    )

@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     rate_limit_code_attempts_per_5min: int = 15
     rate_limit_forgot_per_hour: int = 6
     rate_limit_speech_per_minute: int = 20
+    rate_limit_tts_per_minute: int = 20
     rate_limit_vision_per_minute: int = 6
 
     # --- Meta endpoints (Meta models only) ---
@@ -168,6 +169,19 @@ class Settings(BaseSettings):
     # A voice note is a chat turn, not a recording session.
     speech_max_bytes: int = 10_000_000
     speech_timeout_seconds: float = 60.0
+    # Spoken replies (text to speech). The one non-Meta AI service: Meta has no speech-output model.
+    # Empty key = off; the app then falls back to the phone's own voice.
+    elevenlabs_api_key: str = ""
+    elevenlabs_base_url: str = "https://api.elevenlabs.io"
+    # "Sarah", a premade voice. Free plans can't use library voices through the API (HTTP 402),
+    # only premade ones; list yours with GET /v1/voices.
+    elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
+    # Flash is the low-latency model, which matters for a spoken reply.
+    elevenlabs_model_id: str = "eleven_flash_v2_5"
+    elevenlabs_timeout_seconds: float = 20.0
+    # Billed per character, so cap one request and remember recent results.
+    tts_max_chars: int = 600
+    tts_cache_entries: int = 64
 
     # --- phase 2: budgets (per user, per UTC day) ---
     budget_daily_calls: int = 200

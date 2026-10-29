@@ -83,6 +83,18 @@ def outbox(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]:
     return sent
 
 
+@pytest.fixture(autouse=True)
+def _no_paid_voice(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """A real ELEVENLABS_API_KEY in .env must never be spent by the suite (it is billed per
+    character). Tests that need spoken output install a fake synthesizer explicitly."""
+    from app.ai import tts
+
+    monkeypatch.setattr(get_settings(), "elevenlabs_api_key", "")
+    tts.set_synthesizer(None)
+    yield
+    tts.set_synthesizer(None)
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
