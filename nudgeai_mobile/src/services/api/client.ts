@@ -15,7 +15,13 @@ type Retriable = InternalAxiosRequestConfig & { _retried?: boolean };
 
 export function createClient(baseURL = API_URL): AxiosInstance {
   // eslint-disable-next-line import/no-named-as-default-member
-  const instance = axios.create({ baseURL, timeout: TIMEOUT_MS });
+  const instance = axios.create({
+    baseURL,
+    timeout: TIMEOUT_MS,
+    // ngrok's free plan puts a warning page in front of browser requests (the web build); this
+    // header skips it and is ignored everywhere else.
+    headers: { 'ngrok-skip-browser-warning': '1' },
+  });
 
   instance.interceptors.request.use(async (config) => {
     const tokens = await getTokens();

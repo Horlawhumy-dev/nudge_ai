@@ -45,6 +45,19 @@ describe('api client', () => {
     expect(calls).toEqual(['get /habits Bearer old']);
   });
 
+  it('skips ngrok’s browser warning page, which would otherwise swallow web requests', async () => {
+    const seen: string[] = [];
+    const client = createClient(BASE);
+    client.defaults.adapter = async (
+      config: InternalAxiosRequestConfig
+    ): Promise<AxiosResponse> => {
+      seen.push(String(config.headers.get('ngrok-skip-browser-warning')));
+      return { data: {}, status: 200, statusText: '', headers: {}, config } as AxiosResponse;
+    };
+    await client.get('/habits');
+    expect(seen).toEqual(['1']);
+  });
+
   it('refreshes an expired token once and retries', async () => {
     const calls: string[] = [];
     const client = createClient(BASE);

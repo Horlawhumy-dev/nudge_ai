@@ -40,6 +40,7 @@ async function open(body: ChatTurnBody, token: string | null, signal?: AbortSign
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      'ngrok-skip-browser-warning': '1', // see services/api/client.ts
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),

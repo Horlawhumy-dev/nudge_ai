@@ -41,7 +41,8 @@ cp .env.example .env       # then edit EXPO_PUBLIC_API_URL
 make start
 ```
 
-- On a **phone** use your computer's LAN address (e.g. `http://192.168.1.20:8079/api/v1`), not `localhost`; start the API so the phone can reach it: `make run HOST=0.0.0.0` in `nudgeai_backend`.
+- **Easiest and most reliable: an ngrok tunnel.** It gives the API a fixed HTTPS address that survives switching networks, needs no firewall rule, and works from any network. Once: `ngrok config add-authtoken <token>` and claim your free static domain in the ngrok dashboard. Then, in `nudgeai_backend`: `make run` and, in a second terminal, `make tunnel NGROK_DOMAIN=<your-name>.ngrok-free.app`. Set `EXPO_PUBLIC_API_URL=https://<your-name>.ngrok-free.app/api/v1` here and run `make start`. The API stays on `127.0.0.1`, so it isn't exposed on your local network, but it is public on the internet: keep `CORS_ORIGINS` specific and don't leave it running unattended.
+- Without a tunnel, on a **phone** use your computer's LAN address (e.g. `http://192.168.1.20:8079/api/v1`), not `localhost`; start the API so the phone can reach it: `make run HOST=0.0.0.0` in `nudgeai_backend`.
 - The Android **emulator** reaches your computer at `http://10.0.2.2:8079/api/v1`; the iOS simulator can use `localhost`.
 - With the URL set the app uses real accounts: sign-up emails a 4-digit code, habits/tasks/settings/chat/notifications live on the server, voice records with the microphone and the chat button can read tasks from a photo. Tokens are kept in the device keychain and refreshed silently.
 - **Push notifications** need a development build and an EAS project id (`npx eas-cli init`); until then the app works without them. With a server account the backend decides when to nudge, so the app's own scheduled reminders are off.
