@@ -10,6 +10,8 @@ import { HabitSheet } from '@/features/habits/components/HabitSheet';
 import { FilterBar } from '@/features/habits/components/FilterBar';
 import { HabitList } from '@/features/habits/components/HabitList';
 import { StatPill } from '@/features/habits/components/StatPill';
+import { SeeMore } from '@/features/home/components/SeeMore';
+import { PAGE_SIZE, usePaging } from '@/hooks/usePaging';
 import { overallStreak } from '@/features/habits/streak';
 import { useHabitsStore } from '@/store/useHabitsStore';
 import { colors } from '@/theme';
@@ -24,6 +26,7 @@ export default function Habits() {
   const [sheet, setSheet] = useState(false);
 
   const visible = filter === 'All' ? habits : habits.filter((h) => h.timeOfDay === filter);
+  const paged = usePaging(visible, PAGE_SIZE, filter);
 
   return (
     <Screen
@@ -57,7 +60,10 @@ export default function Habits() {
       />
       <FilterBar filters={HABIT_FILTERS} value={filter} onChange={setFilter} />
       {visible.length > 0 ? (
-        <HabitList habits={visible} />
+        <>
+          <HabitList habits={paged.visible} />
+          <SeeMore remaining={paged.remaining} noun="habits" onPress={paged.more} />
+        </>
       ) : (
         <View style={styles.empty}>
           <EmptyState

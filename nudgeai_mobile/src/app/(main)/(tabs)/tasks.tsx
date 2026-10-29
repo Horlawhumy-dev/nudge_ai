@@ -16,8 +16,11 @@ import {
   groupTasks,
   isForToday,
   isVisible,
+  limitSections,
   matchesFilter,
 } from '@/features/tasks/utils';
+import { SeeMore } from '@/features/home/components/SeeMore';
+import { PAGE_SIZE } from '@/hooks/usePaging';
 import { useNow } from '@/hooks/useNow';
 import { formatLongDate } from '@/lib/format';
 import { useTasksStore } from '@/store/useTasksStore';
@@ -41,10 +44,14 @@ export default function Tasks() {
 
   const now = useNow();
   const visible = tasks.filter((t) => isVisible(t, now));
-  const sections = groupTasks(
+  const all = groupTasks(
     visible.filter((t) => matchesFilter(t, filter, now)),
     now
   );
+  const total = all.reduce((n, s) => n + s.tasks.length, 0);
+  const [shown, setShown] = useState({ filter, count: PAGE_SIZE });
+  const count = shown.filter === filter ? shown.count : PAGE_SIZE;
+  const sections = limitSections(all, count);
   const today = tasks.filter((t) => isForToday(t, now));
   const done = doneCount(today);
 
@@ -90,6 +97,11 @@ export default function Tasks() {
           />
         </View>
       )}
+      <SeeMore
+        remaining={total - count}
+        noun="tasks"
+        onPress={() => setShown({ filter, count: count + PAGE_SIZE })}
+      />
       <TaskSheet visible={sheet} onClose={() => setSheet(false)} />
     </Screen>
   );

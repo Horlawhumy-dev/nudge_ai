@@ -82,6 +82,18 @@ export function groupTasks(tasks: readonly Task[], now: Date = new Date()): Task
   })).filter((s) => s.tasks.length > 0);
 }
 
+/** The first `limit` tasks across the sections, in order; sections left empty are dropped. */
+export function limitSections(sections: readonly TaskSection[], limit: number): TaskSection[] {
+  let left = limit;
+  const out: TaskSection[] = [];
+  for (const section of sections) {
+    if (left <= 0) break;
+    out.push({ ...section, tasks: section.tasks.slice(0, left) });
+    left -= section.tasks.length;
+  }
+  return out;
+}
+
 export function doneCount(tasks: readonly Task[]): number {
   return tasks.filter((t) => t.done).length;
 }

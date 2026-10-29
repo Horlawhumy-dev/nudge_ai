@@ -88,3 +88,24 @@ describe('task utils', () => {
     expect(addDays(morning, 1).getDate()).toBe(14);
   });
 });
+
+describe('limitSections', () => {
+  const t = (id: string) => ({ id }) as never;
+  const sections = [
+    { status: 'overdue', title: 'Overdue', tasks: [t('1'), t('2'), t('3')] },
+    { status: 'upcoming', title: 'Upcoming', tasks: [t('4'), t('5'), t('6')] },
+  ] as never;
+
+  it('takes tasks in order across sections and drops the empty ones', () => {
+    const { limitSections } = jest.requireActual('../utils');
+    expect(limitSections(sections, 2).map((s: { tasks: unknown[] }) => s.tasks.length)).toEqual([
+      2,
+    ]);
+    expect(limitSections(sections, 4).map((s: { tasks: unknown[] }) => s.tasks.length)).toEqual([
+      3, 1,
+    ]);
+    expect(limitSections(sections, 10).map((s: { tasks: unknown[] }) => s.tasks.length)).toEqual([
+      3, 3,
+    ]);
+  });
+});

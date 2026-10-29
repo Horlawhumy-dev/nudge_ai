@@ -23,3 +23,16 @@ describe('usePaging', () => {
     expect(result.current.remaining).toBe(0);
   });
 });
+
+describe('usePaging reset', () => {
+  it('starts again from the first page when the key changes', async () => {
+    const { result, rerender } = await renderHook(
+      ({ key }: { key: string }) => usePaging(items, 5, key),
+      { initialProps: { key: 'All' } }
+    );
+    await act(async () => result.current.more());
+    expect(result.current.visible).toHaveLength(10);
+    await rerender({ key: 'Morning' });
+    expect(result.current.visible).toHaveLength(5);
+  });
+});
