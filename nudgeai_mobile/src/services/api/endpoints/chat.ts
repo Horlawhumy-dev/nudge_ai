@@ -19,6 +19,16 @@ export type ApiProposal = {
   args: Record<string, unknown>;
   summary: string;
   status: string;
+  when_confirmed?: boolean;
+};
+
+/** What can be changed on a suggested task. `null` clears a field (no start time = all day). */
+export type ProposalEdit = {
+  title?: string;
+  date?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  priority?: 'high' | 'medium' | 'low';
 };
 
 export type ApiConversation = { id: string; title: string; created_at: string };
@@ -101,6 +111,10 @@ export async function streamChat(
 export const proposalsApi = {
   async confirm(id: string) {
     await api.post(`/proposals/${id}/confirm`);
+  },
+  async edit(id: string, changes: ProposalEdit) {
+    const { data } = await api.patch<ApiProposal>(`/proposals/${id}`, changes);
+    return data;
   },
   async reject(id: string) {
     await api.post(`/proposals/${id}/reject`);

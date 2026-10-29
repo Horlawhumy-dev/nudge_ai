@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 import { proposalsApi } from '@/services/api/endpoints/chat';
 import { ApiError } from '@/services/api/errors';
 import { useChatStore } from '@/store/useChatStore';
@@ -80,5 +82,57 @@ describe('MessageBubble proposals', () => {
     await render(<MessageBubble message={failed} />);
     await fireEvent.press(screen.getByLabelText('Try again'));
     expect(retry).toHaveBeenCalledWith('m2');
+  });
+});
+
+describe('a suggested task', () => {
+  const suggestion = (args: Record<string, unknown>): ChatMessage => ({
+    id: 'm1',
+    role: 'assistant',
+    text: 'Here.',
+    proposals: [
+      { id: 'p1', summary: 'Add task: Dentist', status: 'pending', tool: 'task_create', args },
+    ],
+  });
+  const show = async (message: ChatMessage) => {
+    useChatStore.setState({
+      conversations: [{ id: 'c1', createdAt: 1, messages: [message] }],
+      activeId: 'c1',
+    });
+    await render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 360, height: 800 },
+          insets: { top: 0, left: 0, right: 0, bottom: 0 },
+        }}
+      >
+        <MessageBubble message={message} />
+      </SafeAreaProvider>
+    );
+  };
+
+  it('has an Edit button that opens the day and time to check', async () => {
+    await show(suggestion({ title: 'Dentist', date: '2026-11-02', start_time: '15:00' }));
+    await fireEvent.press(screen.getByLabelText('Edit suggestion'));
+    expect(screen.getByTestId('proposal-save')).toBeTruthy();
+  });
+
+  it('opens the editor instead of confirming when there is no day', async () => {
+    await show(suggestion({ title: 'Dentist' }));
+    await fireEvent.press(screen.getByLabelText('Confirm change'));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByText('Pick the day this is for.')).toBeTruthy();
+  });
+
+  it('has no Edit button on other kinds of change', async () => {
+    await show({
+      id: 'm1',
+      role: 'assistant',
+      text: 'x',
+      proposals: [
+        { id: 'p2', summary: 'Add habit: Floss', status: 'pending', tool: 'habit_create' },
+      ],
+    });
+    expect(screen.queryByLabelText('Edit suggestion')).toBeNull();
   });
 });

@@ -26,6 +26,7 @@ export default function Chat() {
   const send = useChatStore((s) => s.send);
   const sendPhoto = useChatStore((s) => s.sendPhoto);
   const [draft, setDraft] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const keyboardVisible = useKeyboardVisible();
   const { prompt } = useLocalSearchParams<{ prompt?: string }>();
@@ -49,7 +50,7 @@ export default function Chat() {
         mediaTypes: ['images'],
         quality: 0.6,
       });
-      if (!result.canceled && result.assets[0]) await sendPhoto(result.assets[0].uri);
+      if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri); // wait for instructions
     } catch {
       toast.error('Couldn’t open your photos.');
     }
@@ -58,6 +59,12 @@ export default function Chat() {
   const submit = () => {
     const text = draft;
     setDraft('');
+    if (photo) {
+      const uri = photo;
+      setPhoto(null);
+      void sendPhoto(uri, text);
+      return;
+    }
     void send(text);
   };
 
@@ -75,6 +82,8 @@ export default function Chat() {
             onSend={submit}
             onVoice={() => router.push('/chat/voice')}
             onPhoto={DEMO_MODE ? undefined : () => void pickPhoto()}
+            attachment={photo}
+            onRemoveAttachment={() => setPhoto(null)}
             disabled={isReplying}
           />
         </View>

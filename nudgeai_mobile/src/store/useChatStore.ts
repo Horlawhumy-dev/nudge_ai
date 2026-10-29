@@ -14,6 +14,7 @@ import {
   proposalsApi,
   streamChat,
   type ApiProposal,
+  type ProposalEdit,
 } from '@/services/api/endpoints/chat';
 
 import { persistStorage } from './persist';
@@ -41,7 +42,7 @@ type ChatState = {
   streaming: boolean;
   send: (text: string, options?: SendOptions) => Promise<ChatMessage | null>;
   /** Read tasks off a photo; the assistant answers with confirm-gated proposals. */
-  sendPhoto: (uri: string) => Promise<void>;
+  sendPhoto: (uri: string, note?: string) => Promise<void>;
   /** Resend the message a failed reply was answering. */
   retry: (messageId: string) => Promise<void>;
   /** Confirm or decline a change the assistant proposed. */
@@ -50,6 +51,12 @@ type ChatState = {
     proposalId: string,
     action: 'confirm' | 'reject'
   ) => Promise<void>;
+  /** Change a suggested task by hand. Resolves to an error message, or null when it was saved. */
+  editProposal: (
+    messageId: string,
+    proposalId: string,
+    changes: ProposalEdit
+  ) => Promise<string | null>;
   /** Replace the history with the server's copy of the latest conversations. */
   loadHistory: () => Promise<void>;
   openConversation: (id: string) => void;
@@ -59,6 +66,26 @@ type ChatState = {
   seedDemo: () => void;
   clear: () => void;
 };
+
+function proposalOf(state: ChatState, messageId: string, proposalId: string): Proposal | undefined {
+  for (const c of state.conversations) {
+    const m = c.messages.find((x) => x.id === messageId);
+    if (m) return m.proposals?.find((p) => p.id === proposalId);
+  }
+  return undefined;
+}
+
+/** A suggestion as the app keeps it. */
+function proposalFromApi(p: ApiProposal): Proposal {
+  return {
+    id: p.id,
+    summary: p.summary,
+    status: 'pending',
+    tool: p.tool,
+    args: p.args,
+    whenConfirmed: p.when_confirmed ?? false,
+  };
+}
 
 const REPLY_DELAY_MS = 900;
 const NO_MESSAGES: ChatMessage[] = [];
@@ -141,10 +168,7 @@ async function answerFromServer(
           reply.text = String(d.content ?? '');
         } else if (event === 'proposal') {
           const p = d as unknown as ApiProposal;
-          reply.proposals = [
-            ...(reply.proposals ?? []),
-            { id: p.id, summary: p.summary, status: 'pending' },
-          ];
+          reply.proposals = [...(reply.proposals ?? []), proposalFromApi(p)];
         } else if (event === 'meta') {
           if (typeof d.trace_id === 'string') reply.traceId = d.trace_id;
         } else if (event === 'budget') {
@@ -233,11 +257,12 @@ export const useChatStore = create<ChatState>()(
         return reply;
       },
 
-      sendPhoto: async (uri) => {
+      sendPhoto: async (uri, note) => {
+        const words = note?.trim();
         const userMessage: ChatMessage = {
           id: createId('msg'),
           role: 'user',
-          text: '📷 Photo',
+          text: words ? `📷 ${words}` : '📷 Photo',
           via: 'text',
         };
         let id = get().activeId;
@@ -257,14 +282,10 @@ export const useChatStore = create<ChatState>()(
         set(() => ({ isReplying: true }));
         const reply: ChatMessage = { id: createId('msg'), role: 'assistant', text: '' };
         try {
-          const found = await visionApi.extract(uri);
+          const found = await visionApi.extract(uri, words);
           reply.text = found.message || 'Here’s what I found.';
           if (found.proposals.length > 0) {
-            reply.proposals = found.proposals.map((p) => ({
-              id: p.id,
-              summary: p.summary,
-              status: 'pending' as const,
-            }));
+            reply.proposals = found.proposals.map(proposalFromApi);
           }
         } catch (e) {
           reply.failed = false;
@@ -315,6 +336,14 @@ export const useChatStore = create<ChatState>()(
           }));
         patch({ status: 'working', error: undefined });
         try {
+          const mine = proposalOf(get(), messageId, proposalId);
+          if (action === 'confirm' && mine?.tool === 'task_create' && !mine.whenConfirmed) {
+            // The day and time on the card are what the person is approving by tapping Confirm.
+            await proposalsApi.edit(proposalId, {
+              date: String(mine.args?.date ?? ''),
+              start_time: (mine.args?.start_time as string | undefined) ?? null,
+            });
+          }
           if (action === 'confirm') await proposalsApi.confirm(proposalId);
           else await proposalsApi.reject(proposalId);
         } catch (e) {
@@ -328,6 +357,32 @@ export const useChatStore = create<ChatState>()(
         if (action === 'confirm') {
           // The assistant changed the user's data: pull it so every screen shows the result.
           await syncPlanner().catch(() => undefined);
+        }
+      },
+
+      editProposal: async (messageId, proposalId, changes) => {
+        try {
+          const saved = await proposalsApi.edit(proposalId, changes);
+          set((s) => ({
+            conversations: s.conversations.map((c) => ({
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      proposals: m.proposals?.map((p) =>
+                        p.id === proposalId
+                          ? { ...p, summary: saved.summary, args: saved.args, whenConfirmed: true }
+                          : p
+                      ),
+                    }
+                  : m
+              ),
+            })),
+          }));
+          return null;
+        } catch (e) {
+          return e instanceof ApiError ? e.message : 'Couldn’t save that. Try again.';
         }
       },
 

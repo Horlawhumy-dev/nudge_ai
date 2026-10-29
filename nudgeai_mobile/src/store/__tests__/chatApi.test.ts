@@ -88,7 +88,7 @@ describe('chat against a backend', () => {
     ]);
     await useChatStore.getState().send('push deep work to 11');
     const reply = active().messages[1];
-    expect(reply.proposals).toEqual([
+    expect(reply.proposals).toMatchObject([
       { id: 'p1', summary: 'Change “Deep work”: start time 11:00', status: 'pending' },
     ]);
 
@@ -226,6 +226,13 @@ describe('chat against a backend', () => {
     expect(useChatStore.getState().isReplying).toBe(false);
   });
 
+  it('sends the instructions typed with a photo along with it', async () => {
+    jest.mocked(visionApi.extract).mockResolvedValue({ message: 'Done.', proposals: [] });
+    await useChatStore.getState().sendPhoto('file:///list.jpg', '  these are for next week ');
+    expect(visionApi.extract).toHaveBeenCalledWith('file:///list.jpg', 'these are for next week');
+    expect(active().messages[0].text).toBe('📷 these are for next week');
+  });
+
   it('explains an unreadable or oversized photo instead of failing silently', async () => {
     jest.mocked(visionApi.extract).mockRejectedValue(new ApiError('too big', 413));
     await useChatStore.getState().sendPhoto('file:///huge.jpg');
@@ -318,5 +325,65 @@ describe('chat against a backend', () => {
       expect(texts()).toEqual(['hello', 'All good.']);
       expect(useChatStore.getState().streaming).toBe(false);
     });
+  });
+});
+
+describe('suggested tasks need their day and time approved', () => {
+  const task = (over: object = {}) => ({
+    id: 'p1',
+    summary: 'Add task: Dentist on 2026-11-02 at 15:00',
+    status: 'pending' as const,
+    tool: 'task_create',
+    args: { title: 'Dentist', date: '2026-11-02', start_time: '15:00' },
+    whenConfirmed: false,
+    ...over,
+  });
+  const seed = (p: object) =>
+    useChatStore.setState({
+      conversations: [
+        {
+          id: 'c1',
+          createdAt: 1,
+          messages: [{ id: 'm1', role: 'assistant', text: 'ok', proposals: [p as never] }],
+        },
+      ],
+      activeId: 'c1',
+    });
+  const card = () => useChatStore.getState().conversations[0].messages[0].proposals?.[0];
+
+  it('sends the day and time shown on the card before confirming', async () => {
+    seed(task());
+    proposals.edit.mockResolvedValue({} as never);
+    proposals.confirm.mockResolvedValue(undefined);
+    await useChatStore.getState().resolveProposal('m1', 'p1', 'confirm');
+    expect(proposals.edit).toHaveBeenCalledWith('p1', { date: '2026-11-02', start_time: '15:00' });
+    expect(proposals.confirm).toHaveBeenCalledWith('p1');
+    expect(card()?.status).toBe('confirmed');
+  });
+
+  it('does not repeat the approval once the person has edited it', async () => {
+    seed(task({ whenConfirmed: true }));
+    proposals.confirm.mockResolvedValue(undefined);
+    await useChatStore.getState().resolveProposal('m1', 'p1', 'confirm');
+    expect(proposals.edit).not.toHaveBeenCalled();
+  });
+
+  it('keeps an edit on the card and reports why a bad one was refused', async () => {
+    seed(task());
+    proposals.edit.mockResolvedValueOnce({
+      summary: 'Add task: Dentist on 2026-11-03 at 16:30',
+      args: { title: 'Dentist', date: '2026-11-03', start_time: '16:30' },
+    } as never);
+    const ok = await useChatStore
+      .getState()
+      .editProposal('m1', 'p1', { date: '2026-11-03', start_time: '16:30' });
+    expect(ok).toBeNull();
+    expect(card()).toMatchObject({
+      summary: 'Add task: Dentist on 2026-11-03 at 16:30',
+      whenConfirmed: true,
+    });
+
+    proposals.edit.mockRejectedValueOnce(new ApiError('Pick a date.', 409));
+    expect(await useChatStore.getState().editProposal('m1', 'p1', {})).toBe('Pick a date.');
   });
 });

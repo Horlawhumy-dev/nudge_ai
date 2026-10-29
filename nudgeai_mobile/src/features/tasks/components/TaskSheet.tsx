@@ -33,10 +33,10 @@ type TaskSheetProps = {
 };
 
 const PRIORITIES: readonly TaskPriority[] = ['High', 'Medium', 'Low'];
-const ALL_DAY = 'all-day';
+export const ALL_DAY = 'all-day';
 
 /** Half-hour slots from 6:00 am to 11:30 pm as "HH:mm" values, preceded by "All day". */
-const TIME_OPTIONS = [
+export const TIME_OPTIONS = [
   { label: 'All day', value: ALL_DAY },
   ...Array.from({ length: 36 }, (_, i) => {
     const minutes = 6 * 60 + i * 30;

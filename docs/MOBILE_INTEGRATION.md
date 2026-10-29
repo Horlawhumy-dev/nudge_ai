@@ -135,3 +135,11 @@ make worker            # the nudge worker (separate process)
 - Weekly reports arrive as an inbox message (title "Your weekly report") and a Monday-morning push, once the worker runs.
 - Photo extraction uses the multimodal Meta model; with no key the fake client answers, so test it against a real key before demoing.
 - Avatars use Cloudinary once its three keys are set; until then they sit on local disk (single host only). A direct upload the app never attaches is left behind in the `nudge/avatars` folder; clean it with a Cloudinary lifecycle rule if that matters.
+
+## Suggested tasks: edit and approve the day and time
+
+A `task_create` proposal (from chat, voice or a photo) can't be confirmed until the person has approved its day and time.
+
+- `PATCH /proposals/{id}` with any of `title`, `date`, `start_time`, `end_time`, `priority` (only while `pending`). `start_time: null` makes it all-day. A date is required. Saving marks the proposal `when_confirmed: true` and returns the new `summary`.
+- `POST /proposals/{id}/confirm` on a `task_create` that isn't `when_confirmed` returns 409 "Confirm the date and time first." The app's Confirm button sends the card's date/time through the PATCH first; with no date on the card it opens the editor instead.
+- `POST /vision/extract?note=...` takes the instruction typed with the photo (max 500 chars).

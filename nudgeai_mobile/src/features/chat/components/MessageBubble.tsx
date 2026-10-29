@@ -16,6 +16,7 @@ import { ProposalCard } from './ProposalCard';
  */
 export function MessageBubble({ message }: { message: ChatMessage }) {
   const resolveProposal = useChatStore((s) => s.resolveProposal);
+  const editProposal = useChatStore((s) => s.editProposal);
   const retry = useChatStore((s) => s.retry);
   const onRetry = () => void retry(message.id);
   const onProposal = (proposalId: string, action: 'confirm' | 'reject') =>
@@ -47,6 +48,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
             proposal={p}
             onConfirm={() => onProposal(p.id, 'confirm')}
             onReject={() => onProposal(p.id, 'reject')}
+            onEdit={(edit) => editProposal(message.id, p.id, edit)}
           />
         ))}
       </View>

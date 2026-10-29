@@ -14,10 +14,11 @@ export function mimeOf(bytes: Uint8Array): string {
 
 export const visionApi = {
   /** Read tasks and habits off a photo (a to-do list, a whiteboard…). Returns proposals only. */
-  async extract(uri: string) {
+  async extract(uri: string, note?: string) {
     const bytes = await new File(uri).bytes(); // read the file itself, not a fetch of its uri
     const { data } = await api.post<PhotoExtraction>('/vision/extract', bytes, {
       headers: { 'Content-Type': mimeOf(bytes) },
+      params: note?.trim() ? { note: note.trim() } : undefined,
       timeout: 90_000,
     });
     return data;

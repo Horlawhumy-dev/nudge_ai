@@ -10,6 +10,12 @@ export type Proposal = {
   status: ProposalStatus;
   /** Why it failed, when it did (e.g. a plan limit). */
   error?: string;
+  /** What kind of change it is, e.g. `task_create`. */
+  tool?: string;
+  /** The assistant's proposed values; for a task: title, date, start_time, end_time, priority. */
+  args?: Record<string, unknown>;
+  /** The person has seen and approved the day and time (or edited them). */
+  whenConfirmed?: boolean;
 };
 
 export type ChatMessage = {
