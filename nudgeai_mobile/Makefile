@@ -1,4 +1,7 @@
-.PHONY: install start android ios web typecheck lint test test-watch format format-check check doctor fix-deps export-web clean help
+# This computer's current Wi-Fi/LAN address (it changes when you switch networks).
+LAN_IP := $(shell ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($$i=="src") print $$(i+1)}')
+
+.PHONY: install start lan android ios web typecheck lint test test-watch format format-check check doctor fix-deps export-web clean help
 
 # Use `make <target>`. Run `make` or `make help` to list targets.
 
@@ -7,6 +10,11 @@ install: ## Install dependencies
 
 start: ## Start the Expo dev server (press w for web, or scan the QR with Expo Go)
 	npx expo start
+
+lan: ## Start Expo pointed at the API on this computer's current address (use after changing networks)
+	@test -n "$(LAN_IP)" || (echo "Couldn't detect your LAN address; set EXPO_PUBLIC_API_URL yourself." && exit 1)
+	@echo "API: http://$(LAN_IP):8079/api/v1  (run 'make run HOST=0.0.0.0' in nudgeai_backend)"
+	EXPO_PUBLIC_API_URL=http://$(LAN_IP):8079/api/v1 npx expo start -c
 
 android: ## Start on an Android device/emulator
 	npx expo start --android

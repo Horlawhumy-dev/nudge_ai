@@ -53,8 +53,9 @@ That message means the phone couldn't fetch the JavaScript bundle from your comp
 
 1. **A firewall on your computer is blocking the phone.** On Linux with `ufw`: `sudo ufw allow 8081/tcp` (Expo's dev server) and `sudo ufw allow 8079/tcp` (the API).
 2. **Different networks.** The phone and the computer must be on the same Wi-Fi (not a guest network or one with client isolation), with any VPN off. If you can't get that, use `npx expo start --tunnel`.
-3. **Wrong address in the QR code.** On a machine with Docker, Expo can advertise a `172.x` address. Force the right one: `REACT_NATIVE_PACKAGER_HOSTNAME=<your LAN address> make start`.
-4. **Expo Go out of date.** This project is on SDK 57; update Expo Go from the store.
+3. **The API address changed.** Your computer's address changes when you switch Wi-Fi networks, so a saved `EXPO_PUBLIC_API_URL` goes stale. `make lan` starts Expo with the current address filled in (and `make run HOST=0.0.0.0` must be running in `nudgeai_backend`).
+4. **Wrong address in the QR code.** On a machine with Docker, Expo can advertise a `172.x` address. Force the right one: `REACT_NATIVE_PACKAGER_HOSTNAME=<your LAN address> make start`.
+5. **Expo Go out of date.** This project is on SDK 57; update Expo Go from the store.
 
 Quick check from the computer: `curl http://<your LAN address>:8081/status` should print `packager-status:running`.
 
