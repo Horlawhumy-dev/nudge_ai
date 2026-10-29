@@ -44,7 +44,7 @@ make start
 - **Easiest and most reliable: an ngrok tunnel.** It gives the API a fixed HTTPS address that survives switching networks, needs no firewall rule, and works from any network. Once: `ngrok config add-authtoken <token>` and claim your free static domain in the ngrok dashboard. Then, in `nudgeai_backend`: `make run` and, in a second terminal, `make tunnel NGROK_DOMAIN=<your-name>.ngrok-free.app`. Set `EXPO_PUBLIC_API_URL=https://<your-name>.ngrok-free.app/api/v1` here and run `make start`. The API stays on `127.0.0.1`, so it isn't exposed on your local network, but it is public on the internet: keep `CORS_ORIGINS` specific and don't leave it running unattended.
 - Without a tunnel, on a **phone** use your computer's LAN address (e.g. `http://192.168.1.20:8079/api/v1`), not `localhost`; start the API so the phone can reach it: `make run HOST=0.0.0.0` in `nudgeai_backend`.
 - The Android **emulator** reaches your computer at `http://10.0.2.2:8079/api/v1`; the iOS simulator can use `localhost`.
-- With the URL set the app uses real accounts: sign-up emails a 4-digit code, habits/tasks/settings/chat/notifications live on the server, voice records with the microphone and the chat button can read tasks from a photo. Tokens are kept in the device keychain and refreshed silently.
+- With the URL set the app uses real accounts: sign-up emails a 4-digit code, habits/tasks/settings/chat/notifications live on the server, voice mode transcribes live as you speak and sends the sentence on its own when you pause, and the chat button can read tasks from a photo. Tokens are kept in the device keychain and refreshed silently.
 - **Push notifications** need a development build and an EAS project id (`npx eas-cli init`); until then the app works without them. With a server account the backend decides when to nudge, so the app's own scheduled reminders are off.
 - Without the URL the app runs in the offline **demo mode** described below.
 
@@ -148,6 +148,8 @@ proposes appear as Confirm / Not now cards, the mic button records and transcrib
 saved), and the photo button reads tasks off a picture. In demo mode it gives scripted replies. It is
 reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
 question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
+
+**Voice mode** streams the microphone to the backend (`WS /speech/live`) so the words appear while you speak and the finished sentence goes to Nudge about half a second after you stop, with no tap and no upload. The audio is also kept in memory, so if the live connection fails the recording is uploaded instead. Replies stream in too: the text appears with its first word, and each sentence is spoken as soon as it is complete.
 
 **One non-Meta piece:** spoken output. Meta offers speech-to-text but no speech-output model, so replies read aloud in voice mode, and Settings → AI voice & tone → "Preview your Nudge", use ElevenLabs through the backend (`POST /speech/synthesize`). If the backend has no `ELEVENLABS_API_KEY`, or the call fails, the app quietly speaks with the phone's built-in voice instead (`expo-speech`). Replies are trimmed to about 280 characters when read aloud, and the "Voice" switch in notification settings turns spoken replies off. The audio is played from a temporary cache file that is deleted when it finishes.
 

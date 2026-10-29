@@ -31,6 +31,7 @@ endpoints; set `FORCE_FAKE_MODELS=true` to override a key that is present.
 
 ### Not done or not verified
 
+- Chat streaming: the fast model (Baseten) streams word by word, but waiting for the first word dominates (1.3 to 2.3 s, with the occasional multi-second stall), so streaming moves the first sentence only ~0.05 to 0.3 s earlier. The Meta Model API sends its reply in one or two large chunks.
 - Voice with a real Meta key: the route (`POST /v1/asr/transcribe`) and WAV format follow Meta's docs, but the
   multipart field names and reply field haven't been checked against a live key (`app/ai/speech.py`).
 - Billing is a stub (`BILLING_STUB_ENABLED`); turn it off in production.
@@ -184,7 +185,8 @@ per-million-token rates in `app/models/registry.py`.
 
 ## Voice, photos and media
 
-- **Voice** (`POST /speech/transcribe`): the app sends a mono 16-bit WAV; the server forwards it to Meta's
+- **Live voice** (`WS /speech/live`): the phone streams its microphone, we relay it to Meta's realtime model and pass back the words as they are spoken and the finished sentence about 0.5 s after the person stops (measured against the real service). Protocol and limits: `app/ai/live_speech.py` and `docs/MOBILE_INTEGRATION.md`. Transcripts are never logged.
+- **Voice upload** (`POST /speech/transcribe`, the fallback): the app sends a mono 16-bit WAV; the server forwards it to Meta's
   speech model and returns text. Audio is held in memory only, never written to disk or the database.
 - **Spoken replies** (`POST /speech/synthesize`): ElevenLabs text to speech, the one non-Meta AI service, because Meta has no speech-output model. Returns MP3. 503 when `ELEVENLABS_API_KEY` is unset (the app then uses the phone's voice), 502 when the service fails. Billed per character, so requests are capped (`TTS_MAX_CHARS`), rate limited and recent results cached. Free ElevenLabs plans can only use *premade* voices through the API (library voices return 402); the default is "Sarah".
 - **Photos** (`POST /vision/extract`): a to-do list or whiteboard becomes task and habit *proposals*.

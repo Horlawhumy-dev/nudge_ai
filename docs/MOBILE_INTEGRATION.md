@@ -44,7 +44,7 @@ Sign out: `DELETE /devices?token=…` then `POST /auth/logout {refresh_token}`.
 | Chat | `POST /chat` (SSE, below), `GET /conversations`, `GET /conversations/{id}`, `DELETE /conversations/{id}` (+ `/restore`) |
 | Photo → tasks | pick a photo → `POST /vision/extract` (raw PNG/JPEG/WebP body, ≤5 MB) → `{message, proposals[]}`; show each proposal with Add/Skip, then `POST /proposals/{id}/confirm` or `/reject` |
 | "How did the AI decide?" | `meta.trace_id` arrives on every chat stream; `GET /traces/{id}`, or `GET /traces?conversation_id=` for a thread |
-| Voice mode | record → `POST /speech/transcribe` (raw audio body, `audio/*`) → send the text to `POST /chat` with `via: "voice"` |
+| Voice mode | stream the microphone over `WS /speech/live` (words appear as you speak, the finished sentence arrives ~0.5 s after you stop) → send it to `POST /chat` with `via: "voice"` → speak the reply with `POST /speech/synthesize`. Fallback if live is unavailable: `POST /speech/transcribe` (a mono 16-bit WAV body) |
 | Settings → Notification | `GET/PATCH /preferences` (`push_enabled`, `voice_enabled`, `morning_summary_enabled`, `weekly_report_enabled`, `streak_alerts_enabled`) |
 | Settings → Quiet hours | `PATCH /preferences` (`quiet_enabled`, `quiet_start`, `quiet_end`, `quiet_repeat_days` Monday=0, `quiet_allow_priority`). "Weekend quiet hours" = add 5 and 6 to `quiet_repeat_days`. |
 | Settings → AI voice & tone | `PATCH /preferences` (`reminder_tone`, `use_name_in_reminders`, `include_streak_in_reminders`, `use_emojis_in_reminders`) |
@@ -77,10 +77,32 @@ Users carry `avatar_url` (full size, 512×512, cropped square around the face) a
 
 Old `/media/avatars/...` URLs keep working. The signed fields expire after about an hour, so request a fresh intent per attempt.
 
+## Live voice (`WS /api/v1/speech/live`)
+
+Streams speech to Meta's realtime model through our server (the Meta key never reaches the phone). All messages are JSON text frames except audio, which is raw 16 kHz mono 16-bit PCM in binary frames of about 80 ms, sent in real time.
+
+```
+phone → server  {"type":"start","token":"<access token>","mode":"ENDPOINTING"}   first frame, nothing before it
+                <binary audio frames>
+                {"type":"stop"}                       the person ended it (tapped the mic)
+server → phone  {"type":"ready"}                      connected to Meta; hold audio until you see this
+                {"type":"speech","active":true|false}
+                {"type":"partial","text":"…"}         the words so far; each replaces the last
+                {"type":"turn","text":"…"}            the finished sentence
+                {"type":"error","code":"unauthorized|busy|limit|bad_request|unavailable","message":"…"}
+```
+
+- Connecting to Meta takes about 1.5 s, so open the socket when the voice screen opens and buffer audio until `ready` (a burst of buffered audio is accepted).
+- `ENDPOINTING` (the default) finishes the sentence itself about 0.4 to 0.6 s after the person stops; `PUSH_TO_TALK` finishes when you send `stop`.
+- One live session per person at a time (`busy`), a rate limit, and a time limit (`LIVE_SPEECH_MAX_SECONDS`, default 120). An expired token answers `unauthorized`: refresh and reconnect once.
+- Always keep the audio in memory too, and fall back to `POST /speech/transcribe` if the socket fails or doesn't answer. Neither path stores audio on the server.
+
 ## Chat stream (`POST /chat`)
 
 Body: `{ message, conversation_id?, via: "text"|"voice" }`. Response is `text/event-stream`; events in order:
-`conversation {id, title}` → `message {content}` → optional `tool_results`, `proposal {id, tool, summary, …}`, `budget` → `meta` → `done`. Errors arrive as an `error` event.
+`conversation {id, title}` → `delta {content}`\* → `message {content}` → optional `tool_results`, `proposal {id, tool, summary, …}`, `budget` → `meta` → `done`. Errors arrive as an `error` event.
+
+\* `delta` events carry the reply as it is written, so the app can show (and speak) the first words before the model has finished. `reset {}` means a later model round is replacing the words so far (a lead-in like "Let me check." before a tool ran): clear what you showed. `message` always carries the complete final text and wins over anything streamed, so a client may ignore `delta` entirely. The fast model streams word by word; the larger Meta models send their reply in one or two big chunks, so for those the text arrives all at once.
 
 - React Native has no `EventSource`; read the response body as a stream (`expo/fetch` supports it) and parse `event:`/`data:` frames.
 - The model only sees messages of the given `conversation_id`. Omit it to start a new thread and keep the returned id.
@@ -107,7 +129,7 @@ make worker            # the nudge worker (separate process)
 
 ## Known gaps and things to verify
 
-- **Meta voice transcription URL is unverified.** Meta documents a realtime WebSocket (`wss://api.meta.ai/v1/asr/realtime`); the HTTP upload route used by `POST /speech/transcribe` follows the `/audio/transcriptions` convention and may need changing (`MUSE_VOICE_URL`). Confirm against Meta's docs before demoing voice with a real key. Without a key a deterministic fake answers.
+- **Voice with a real key:** both Meta routes (`/v1/asr/transcribe` and the realtime socket) are verified against the live service. Without a key a deterministic fake answers the upload route, and the live socket reports `unavailable` so the app falls back to uploading.
 - **`quiet_allow_priority`** is stored for future task nudges; the engine only nudges habits today.
 - Weekly reports arrive as an inbox message (title "Your weekly report") and a Monday-morning push, once the worker runs.
 - Photo extraction uses the multimodal Meta model; with no key the fake client answers, so test it against a real key before demoing.
