@@ -6,7 +6,9 @@ import { profileApi } from '../endpoints/profile';
 jest.mock('../client', () => ({ api: { post: jest.fn(), put: jest.fn(), delete: jest.fn() } }));
 const mockBytes = new Uint8Array([1, 2, 3]);
 jest.mock('expo-file-system', () => ({
-  File: jest.fn().mockImplementation(() => ({ bytes: async () => mockBytes })),
+  File: class {
+    bytes = async () => mockBytes;
+  },
 }));
 jest.mock('axios', () => ({ __esModule: true, default: { post: jest.fn() } }));
 
