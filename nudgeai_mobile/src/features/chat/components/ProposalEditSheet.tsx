@@ -32,8 +32,8 @@ const PRIORITIES: readonly TaskPriority[] = ['High', 'Medium', 'Low'];
 export function ProposalEditSheet({ proposal, visible, onClose, onSave }: Props) {
   const args = proposal.args ?? {};
   const [title, setTitle] = useState(String(args.title ?? ''));
-  // No guessed day: when the assistant gave none, the person has to pick one.
-  const [date, setDate] = useState(typeof args.date === 'string' ? args.date : '');
+  // Today is shown when the assistant gave no day; saving is the person approving what they see.
+  const [date, setDate] = useState(typeof args.date === 'string' ? args.date : dateKey());
   const [time, setTime] = useState(typeof args.start_time === 'string' ? args.start_time : ALL_DAY);
   const [priority, setPriority] = useState<TaskPriority>(
     args.priority === 'high' ? 'High' : args.priority === 'low' ? 'Low' : 'Medium'
@@ -42,7 +42,7 @@ export function ProposalEditSheet({ proposal, visible, onClose, onSave }: Props)
   const [saving, setSaving] = useState(false);
 
   const titleError = validateTaskTitle(title);
-  const canSave = titleError === null && date !== '' && !saving;
+  const canSave = titleError === null && !saving;
 
   const save = async () => {
     setSaving(true);
@@ -80,12 +80,7 @@ export function ProposalEditSheet({ proposal, visible, onClose, onSave }: Props)
         counter={`${title.trim().length}/${TASK_TITLE_MAX}`}
         maxLength={TASK_TITLE_MAX + 10}
       />
-      <DateField label="Date" value={date || dateKey()} onChange={setDate} minDate={dateKey()} />
-      {date === '' ? (
-        <Text variant="bodyLarge" color={colors.danger}>
-          Pick the day this is for.
-        </Text>
-      ) : null}
+      <DateField label="Date" value={date} onChange={setDate} minDate={dateKey()} />
       <SelectField
         label="Time"
         value={time}

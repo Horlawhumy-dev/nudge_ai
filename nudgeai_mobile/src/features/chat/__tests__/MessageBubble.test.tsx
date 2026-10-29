@@ -121,7 +121,7 @@ describe('a suggested task', () => {
     await show(suggestion({ title: 'Dentist' }));
     await fireEvent.press(screen.getByLabelText('Confirm change'));
     expect(confirm).not.toHaveBeenCalled();
-    expect(screen.getByText('Pick the day this is for.')).toBeTruthy();
+    expect(screen.getByTestId('proposal-save')).toBeTruthy(); // saving approves the day shown
   });
 
   it('has no Edit button on other kinds of change', async () => {
