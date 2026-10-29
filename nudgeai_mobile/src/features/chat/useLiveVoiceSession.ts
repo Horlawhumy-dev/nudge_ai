@@ -5,6 +5,7 @@ import { useSpeaker } from '@/hooks/useSpeaker';
 import { concatInt16, encodeWav, resampleInt16, SPEECH_SAMPLE_RATE, toMono } from '@/lib/wav';
 import { speechApi } from '@/services/api/endpoints/speech';
 import { ApiError } from '@/services/api/errors';
+import { openLiveTranscription, type LiveTranscription } from '@/services/liveTranscribe';
 import { useChatStore } from '@/store/useChatStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { toast } from '@/store/useToastStore';
@@ -17,9 +18,20 @@ const MAX_RECORDING_MS = 60_000;
 const MIN_SAMPLES = SPEECH_SAMPLE_RATE * 0.4;
 
 /**
- * Real voice mode: the microphone is captured as 16 kHz mono PCM in memory, wrapped as WAV,
- * transcribed by the backend (Meta's speech model) and sent to the assistant as a voice message.
- * Nothing is written to disk and the server keeps no audio.
+ * How long to wait for the finished sentence after the person taps stop, before falling back to
+ * uploading the recording. Short when the model has heard nothing at all (a stray tap).
+ */
+export const liveWait = { heardMs: 4_000, silentMs: 1_500 };
+
+/** Mm, uh, "..." and the like: nothing to send to the assistant. */
+const isNoise = (text: string) => !/[\p{L}\p{N}]/u.test(text);
+
+/**
+ * Real voice mode. The microphone is captured as 16 kHz mono PCM and streamed to the backend,
+ * which relays it to Meta's realtime speech model: words appear while you speak, and when you
+ * pause the sentence is sent on its own, with no tap and no upload. If live transcription isn't
+ * available the same audio (kept in memory) is uploaded as a WAV instead. Nothing is written to
+ * disk and the server keeps no audio.
  */
 export function useLiveVoiceSession() {
   const send = useChatStore((s) => s.send);
@@ -27,8 +39,10 @@ export function useLiveVoiceSession() {
   const readRepliesAloud = usePreferencesStore((s) => s.notifications.voice);
   const tone = usePreferencesStore((s) => s.tone);
   const { say, stop: stopSpeaking } = useSpeaker();
-  const [phase, setPhase] = useState<VoicePhase>('idle');
+  const [phase, setPhaseState] = useState<VoicePhase>('idle');
   const [heard, setHeard] = useState('');
+  // The phase also lives in a ref, because callbacks from the live connection outlive renders.
+  const phaseRef = useRef<VoicePhase>('idle');
   const chunks = useRef<Int16Array[]>([]);
   const format = useRef({ sampleRate: SPEECH_SAMPLE_RATE, channels: 1 });
   const paused = useRef(false);
@@ -37,6 +51,15 @@ export function useLiveVoiceSession() {
   const alive = useRef(true);
   // Said once per visit, so a silent reply is explained without nagging on every turn.
   const toldVoiceIsOff = useRef(false);
+  const live = useRef<LiveTranscription | null>(null);
+  const gotWords = useRef(false);
+  const turnWaiter = useRef<((text: string | null) => void) | null>(null);
+  const onTurnRef = useRef<(text: string) => void>(() => undefined);
+
+  const setPhase = useCallback((next: VoicePhase) => {
+    phaseRef.current = next;
+    setPhaseState(next);
+  }, []);
 
   const { stream } = useAudioStream({
     sampleRate: SPEECH_SAMPLE_RATE,
@@ -45,7 +68,13 @@ export function useLiveVoiceSession() {
     onBuffer: (buffer) => {
       if (paused.current) return;
       format.current = { sampleRate: buffer.sampleRate, channels: buffer.channels };
-      chunks.current.push(new Int16Array(buffer.data.slice(0)));
+      const samples = new Int16Array(buffer.data.slice(0));
+      chunks.current.push(samples); // always kept: the fallback if live doesn't deliver
+      live.current?.sendAudio(
+        buffer.sampleRate === SPEECH_SAMPLE_RATE && buffer.channels === 1
+          ? samples
+          : resampleInt16(toMono(samples, buffer.channels), buffer.sampleRate, SPEECH_SAMPLE_RATE)
+      );
     },
   });
 
@@ -60,9 +89,32 @@ export function useLiveVoiceSession() {
     }
   }, [stream]);
 
-  const finish = useCallback(async () => {
-    clearTimeout(limit.current);
-    stopStream();
+  const closeLive = useCallback(() => {
+    live.current?.close();
+    live.current = null;
+  }, []);
+
+  /** Send what was said to the assistant, then read its reply aloud. */
+  const submitText = useCallback(
+    async (text: string) => {
+      if (!alive.current) return;
+      setHeard(text);
+      setPhase('generating');
+      const reply = await send(text, { via: 'voice' });
+      setPhase('idle');
+      if (!reply || reply.failed || !alive.current) return;
+      if (readRepliesAloud) {
+        void say(reply.text, tone);
+      } else if (!toldVoiceIsOff.current) {
+        toldVoiceIsOff.current = true;
+        toast.show('Spoken replies are off. Turn on “Voice” in Settings → Notifications.');
+      }
+    },
+    [send, say, tone, readRepliesAloud, setPhase]
+  );
+
+  /** The fallback: upload the whole recording and wait for the transcript. */
+  const transcribeRecording = useCallback(async () => {
     const { sampleRate, channels } = format.current;
     const raw = concatInt16(chunks.current);
     chunks.current = [];
@@ -89,19 +141,63 @@ export function useLiveVoiceSession() {
       setPhase('idle');
       return;
     }
-    if (!alive.current) return;
-    setHeard(text);
-    setPhase('generating');
-    const reply = await send(text, { via: 'voice' });
-    setPhase('idle');
-    if (!reply || reply.failed || !alive.current) return;
-    if (readRepliesAloud) {
-      void say(reply.text, tone);
-    } else if (!toldVoiceIsOff.current) {
-      toldVoiceIsOff.current = true;
-      toast.show('Spoken replies are off. Turn on “Voice” in Settings → Notifications.');
+    await submitText(text);
+  }, [submitText, setPhase]);
+
+  /** After a tap on stop: tell the live session, and wait (briefly) for the finished sentence. */
+  const waitForTurn = useCallback((session: LiveTranscription) => {
+    return new Promise<string | null>((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle = (text: string | null) => {
+        clearTimeout(timer);
+        turnWaiter.current = null;
+        resolve(text);
+      };
+      turnWaiter.current = settle;
+      timer = setTimeout(
+        () => settle(null),
+        gotWords.current ? liveWait.heardMs : liveWait.silentMs
+      );
+      session.stop();
+    });
+  }, []);
+
+  const finish = useCallback(async () => {
+    clearTimeout(limit.current);
+    stopStream();
+    const session = live.current;
+    if (session) {
+      setPhase('transcribing');
+      const text = await waitForTurn(session);
+      closeLive();
+      if (!alive.current) return;
+      if (text) {
+        chunks.current = [];
+        await submitText(text);
+        return;
+      }
+      // Live didn't answer in time: fall through to the recording.
     }
-  }, [send, stopStream, readRepliesAloud, say, tone]);
+    await transcribeRecording();
+  }, [stopStream, closeLive, waitForTurn, submitText, transcribeRecording, setPhase]);
+
+  // The model decided the sentence is over (hands-free), or answered a tap on stop.
+  useEffect(() => {
+    onTurnRef.current = (raw: string) => {
+      const text = raw.trim();
+      if (isNoise(text)) return;
+      if (turnWaiter.current) {
+        turnWaiter.current(text);
+        return;
+      }
+      if (phaseRef.current !== 'listening') return;
+      clearTimeout(limit.current);
+      stopStream();
+      closeLive();
+      chunks.current = [];
+      void submitText(text);
+    };
+  }, [stopStream, closeLive, submitText]);
 
   const listen = useCallback(async () => {
     stopSpeaking(); // never record over our own voice
@@ -113,23 +209,40 @@ export function useLiveVoiceSession() {
       return;
     }
     try {
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       chunks.current = [];
       paused.current = false;
+      gotWords.current = false;
       setHeard('');
+      // Connecting to the speech model takes about a second and a half, so start it now and let
+      // it overlap with the microphone starting; audio is held until the connection is ready.
+      closeLive();
+      live.current = openLiveTranscription({
+        onPartial: (text) => {
+          gotWords.current = true;
+          if (alive.current) setHeard(text);
+        },
+        onTurn: (text) => onTurnRef.current(text),
+        onFail: () => {
+          live.current = null; // the recording is still being kept; stopping will upload it
+          turnWaiter.current?.(null);
+        },
+      });
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await stream.start();
       if (!alive.current) {
         stopStream();
+        closeLive();
         return;
       }
       setPhase('listening');
       limit.current = setTimeout(() => void finish(), MAX_RECORDING_MS);
     } catch {
+      closeLive();
       if (!alive.current) return;
       toast.error('Couldn’t start the microphone. Try again.');
       setPhase('idle');
     }
-  }, [finish, stream, stopStream, stopSpeaking]);
+  }, [finish, stream, stopStream, stopSpeaking, closeLive, setPhase]);
 
   // Start listening as soon as voice mode opens; always release the microphone on the way out.
   useEffect(() => {
@@ -140,6 +253,7 @@ export function useLiveVoiceSession() {
       clearTimeout(start);
       clearTimeout(limit.current);
       stopStream();
+      closeLive();
     };
     // Only on open/close: `listen` changes identity but must not restart a running session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +272,7 @@ export function useLiveVoiceSession() {
       paused.current = false;
       setPhase('listening');
     }
-  }, [phase]);
+  }, [phase, setPhase]);
 
   return {
     phase,
