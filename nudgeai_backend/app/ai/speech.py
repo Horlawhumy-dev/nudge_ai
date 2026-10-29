@@ -4,15 +4,16 @@ The mobile mic records a short voice note, the app uploads it here, and the text
 normal chat path. ``Transcriber`` is the seam: :class:`MetaTranscriber` talks to Meta,
 :class:`FakeTranscriber` serves tests and local dev without a key.
 
-Meta's file route is ``POST /v1/asr/transcribe`` (model ``muse-voice-transcribe-1.0``) and takes
-mono 16-bit PCM WAV at 16 or 24 kHz, up to 10 minutes / 32 MB. Still unconfirmed against a real
-key: the multipart field names and the transcript field in the reply (Meta's public pages don't
-state them), so the parser is deliberately tolerant. Live audio uses ``wss://api.meta.ai/v1/asr/realtime``
-instead. If the file route differs in practice, only :meth:`MetaTranscriber.transcribe` changes.
+Meta's file route is ``POST /v1/asr/transcribe`` (model ``muse-voice-transcribe-1.0``). It takes a
+multipart body with two parts, taken from Meta's own cookbook (``06_muse_voice``): ``request``, a
+JSON part (``mode``, ``model``, ``audioEncoding``), and ``audio``, the file, which must be mono
+16-bit PCM WAV at 16 or 24 kHz, up to 10 minutes / 32 MB. The reply is ``{sessionId, transcript,
+audioDurationMs, turns}``. Live audio uses ``wss://api.meta.ai/v1/asr/realtime`` instead.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from typing import Protocol
@@ -22,6 +23,10 @@ import httpx
 from app.core.config import get_settings
 
 log = logging.getLogger(__name__)
+
+DEFAULT_VOICE_MODEL = "muse-voice-transcribe-1.0"
+# Voice notes are push-to-talk: one utterance, no speaker labels or endpointing.
+VOICE_MODE = "PUSH_TO_TALK"
 
 
 class SpeechError(Exception):
@@ -48,6 +53,13 @@ def extract_text(payload: object) -> tuple[str, str | None]:
     """Pull (text, language) out of a response, tolerating a few plausible shapes."""
     if isinstance(payload, dict):
         text = payload.get("text") or payload.get("transcript") or ""
+        if not text and isinstance(payload.get("turns"), list):
+            # Speech modes also return per-turn text; join it if the top-level field is empty.
+            text = " ".join(
+                str(t.get("transcript", "")).strip()
+                for t in payload["turns"]
+                if isinstance(t, dict) and t.get("transcript")
+            )
         if not text and isinstance(payload.get("data"), dict):
             return extract_text(payload["data"])
         lang = payload.get("language")
@@ -60,26 +72,34 @@ class MetaTranscriber:
         self._key, self._model, self._url, self._timeout = api_key, model, url, timeout
 
     async def transcribe(self, audio: bytes, *, content_type: str) -> Transcript:
-        files = {"file": ("voice-note", audio, content_type or "application/octet-stream")}
-        data = {"model": self._model} if self._model else {}
+        model = self._model or DEFAULT_VOICE_MODEL
+        params = {"mode": VOICE_MODE, "model": model, "audioEncoding": "WAV"}
+        files: dict[str, tuple[str | None, bytes | str, str]] = {
+            # The settings travel as a JSON part, not as form fields.
+            "request": (None, json.dumps(params), "application/json"),
+            "audio": ("voice-note.wav", audio, "audio/wav"),
+        }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as http:
                 resp = await http.post(
-                    self._url,
-                    headers={"Authorization": f"Bearer {self._key}"},
-                    files=files,
-                    data=data,
+                    self._url, headers={"Authorization": f"Bearer {self._key}"}, files=files
                 )
-                resp.raise_for_status()
+                if resp.status_code != 200:
+                    # Meta's reason ("audio longer than 10 minutes", "malformed request"...) is
+                    # what makes a failure fixable, so keep it in the log.
+                    log.warning(
+                        "muse voice transcribe: HTTP %s: %s", resp.status_code, resp.text[:300]
+                    )
+                    raise SpeechError("transcription is unavailable right now")
                 text, language = extract_text(resp.json())
+        except SpeechError:
+            raise
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("muse voice transcribe failed: %s", exc)
             raise SpeechError("transcription is unavailable right now") from exc
         if not text:
             raise SpeechError("no speech was recognised")
-        return Transcript(
-            text=text, model=self._model or "muse-voice-transcribe", language=language
-        )
+        return Transcript(text=text, model=model, language=language)
 
 
 class FakeTranscriber:

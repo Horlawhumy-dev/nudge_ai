@@ -48,6 +48,10 @@ async def transcribe(request: Request, user: CurrentUser) -> TranscribeResponse:
             )
     if not buf:
         raise HTTPException(status_code=400, detail="no audio in the request body")
+    # Meta's speech model only reads mono 16-bit WAV; anything else would come back as an opaque
+    # 400, so say what is needed here instead.
+    if not (buf[:4] == b"RIFF" and buf[8:12] == b"WAVE"):
+        raise HTTPException(status_code=415, detail="send mono 16-bit WAV audio (16 or 24 kHz)")
 
     try:
         result = await speech.get_transcriber().transcribe(bytes(buf), content_type=content_type)

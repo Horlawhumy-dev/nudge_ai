@@ -52,10 +52,13 @@ async def test_requires_auth_audio_type_and_body(
     assert anon.status_code == 401
     assert (await _post(client, auth_headers, ctype="application/json")).status_code == 415
     assert (await _post(client, auth_headers, body=b"")).status_code == 400
-    # m4a/aac from phones
-    assert (
-        await _post(client, auth_headers, ctype="audio/mp4; codecs=mp4a.40.2")
-    ).status_code == 200
+    # m4a/aac from a phone recorder is not WAV, and Meta's model only reads WAV
+    m4a = await _post(
+        client, auth_headers, body=b"\x00\x00\x00\x18ftypM4A " + b"\x00" * 40, ctype="audio/mp4"
+    )
+    assert m4a.status_code == 415 and "WAV" in m4a.json()["detail"]
+    # the content type may carry parameters; the bytes decide
+    assert (await _post(client, auth_headers, ctype="audio/wav; codecs=1")).status_code == 200
 
 
 async def test_oversize_audio_is_refused(
@@ -103,6 +106,11 @@ async def test_transcribe_is_rate_limited(
 # ------------------------------------------------------------- the Meta transcriber
 
 
+def test_extract_text_falls_back_to_the_turns_of_a_speech_mode_reply() -> None:
+    reply = {"transcript": "", "turns": [{"transcript": "push my"}, {"transcript": "deep work"}]}
+    assert extract_text(reply) == ("push my deep work", None)
+
+
 def test_extract_text_tolerates_response_shapes() -> None:
     assert extract_text({"text": " hi there "}) == ("hi there", None)
     assert extract_text({"transcript": "yo", "language": "en"}) == ("yo", "en")
@@ -111,7 +119,7 @@ def test_extract_text_tolerates_response_shapes() -> None:
     assert extract_text(["not", "a", "dict"]) == ("", None)
 
 
-async def test_meta_transcriber_sends_a_bearer_multipart_request(
+async def test_meta_transcriber_sends_the_request_meta_documents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: dict[str, object] = {}
@@ -121,7 +129,7 @@ async def test_meta_transcriber_sends_a_bearer_multipart_request(
         seen["url"] = str(request.url)
         seen["ctype"] = request.headers["content-type"]
         seen["body"] = request.content
-        return httpx.Response(200, json={"text": "buy milk", "language": "en"})
+        return httpx.Response(200, json={"transcript": "buy milk", "language": "en"})
 
     real = httpx.AsyncClient
     monkeypatch.setattr(
@@ -130,15 +138,20 @@ async def test_meta_transcriber_sends_a_bearer_multipart_request(
     t = MetaTranscriber(
         "sk-test",
         model="muse-voice-transcribe-1.0",
-        url="https://api.meta.ai/v1/audio/transcriptions",
+        url="https://api.meta.ai/v1/asr/transcribe",
         timeout=5,
     )
     out = await t.transcribe(WAV, content_type="audio/wav")
     assert (out.text, out.language, out.model) == ("buy milk", "en", "muse-voice-transcribe-1.0")
     assert seen["auth"] == "Bearer sk-test"
-    assert seen["url"] == "https://api.meta.ai/v1/audio/transcriptions"
+    assert seen["url"] == "https://api.meta.ai/v1/asr/transcribe"
     assert str(seen["ctype"]).startswith("multipart/form-data")
-    assert b"muse-voice-transcribe-1.0" in seen["body"]  # type: ignore[operator]
+    body: bytes = seen["body"]  # type: ignore[assignment]
+    # two parts: a JSON `request` part with the settings, and the `audio` file
+    assert b'name="request"' in body and b"Content-Type: application/json" in body
+    assert b'"mode": "PUSH_TO_TALK"' in body and b'"audioEncoding": "WAV"' in body
+    assert b'"model": "muse-voice-transcribe-1.0"' in body
+    assert b'name="audio"' in body and WAV in body
 
 
 async def test_meta_transcriber_maps_failures_to_speech_error(
@@ -155,6 +168,9 @@ async def test_meta_transcriber_maps_failures_to_speech_error(
 
     t = MetaTranscriber("k", model="m", url="https://x/y", timeout=5)
     install(lambda r: httpx.Response(500))
+    with pytest.raises(SpeechError, match="unavailable"):
+        await t.transcribe(WAV, content_type="audio/wav")
+    install(lambda r: httpx.Response(400, text="audio longer than the cap"))
     with pytest.raises(SpeechError, match="unavailable"):
         await t.transcribe(WAV, content_type="audio/wav")
     install(lambda r: httpx.Response(200, content=b"not json"))
