@@ -10,9 +10,9 @@ from __future__ import annotations
 import base64
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.ai import proposals as proposals_mod
@@ -46,8 +46,16 @@ class ExtractResponse(BaseModel):
         )
     ],
 )
-async def extract(request: Request, user: CurrentUser, session: SessionDep) -> ExtractResponse:
-    """Send the raw PNG/JPEG/WebP bytes; confirm the returned proposals one by one."""
+async def extract(
+    request: Request,
+    user: CurrentUser,
+    session: SessionDep,
+    note: Annotated[str | None, Query(max_length=500)] = None,
+) -> ExtractResponse:
+    """Send the raw PNG/JPEG/WebP bytes; confirm the returned proposals one by one.
+
+    ``note`` is what the person typed to go with the photo ("these are for next week").
+    """
     s = get_settings()
     buf = bytearray()
     async for chunk in request.stream():
@@ -76,7 +84,7 @@ async def extract(request: Request, user: CurrentUser, session: SessionDep) -> E
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Extract the tasks and habits from this image."},
+                {"type": "text", "text": _ask(note)},
                 {
                     "type": "image_url",
                     "image_url": {
@@ -116,6 +124,15 @@ async def extract(request: Request, user: CurrentUser, session: SessionDep) -> E
         message=result.content,
         proposals=[ProposalOut(**p) for p in kept],
     )
+
+
+def _ask(note: str | None) -> str:
+    base = "Extract the tasks and habits from this image."
+    note = (note or "").strip()
+    if not note:
+        return base
+    # The person's own words, unlike the picture, are instructions (dates, which items to skip).
+    return f"{base} The user adds this instruction: {note}"
 
 
 def _uuid(value: Any) -> Any:

@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import date as date_type
 from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.ai import proposals as proposals_mod
@@ -59,6 +60,8 @@ class ProposalOut(BaseModel):
     status: str
     created_at: str | None = None
     confirmed_at: str | None = None
+    # The person has approved this suggestion's day and time (or edited them).
+    when_confirmed: bool = False
 
 
 class HistoryOut(BaseModel):
@@ -305,6 +308,31 @@ async def confirm_proposal(
         return await proposals_mod.confirm(session, user.id, proposal_id)
     except proposals_mod.ProposalError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+class ProposalEdit(BaseModel):
+    """Only the fields sent are changed; ``null`` clears one (no start time = all day)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=320)
+    date: date_type | None = None
+    start_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end_time: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    priority: Literal["high", "medium", "low"] | None = None
+
+
+@router.patch("/proposals/{proposal_id}", response_model=ProposalOut)
+async def edit_proposal(
+    proposal_id: UUID, body: ProposalEdit, user: CurrentUser, session: SessionDep
+) -> ProposalOut:
+    try:
+        row = await proposals_mod.edit(
+            session, user.id, proposal_id, body.model_dump(exclude_unset=True)
+        )
+    except proposals_mod.ProposalError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return ProposalOut(**proposals_mod.to_schema(row))
 
 
 @router.post("/proposals/{proposal_id}/reject")

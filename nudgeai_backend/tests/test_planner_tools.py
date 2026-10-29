@@ -49,6 +49,12 @@ async def _tasks(client: AsyncClient, h: Headers) -> list[dict[str, Any]]:
     return (await client.get(f"{API}/tasks", params={"status": "all"}, headers=h)).json()
 
 
+async def _approve(client: AsyncClient, h: Headers, proposal_id: str, **edits: Any) -> Any:
+    """What the app does when the person confirms a task's day and time."""
+    body = {"date": "2026-11-02", **edits}
+    return await client.patch(f"{API}/proposals/{proposal_id}", json=body, headers=h)
+
+
 # ---------------------------------------------------------------- the confirm gate
 
 
@@ -68,6 +74,9 @@ async def test_creating_a_task_by_chat_is_a_proposal_until_confirmed(
     assert proposal["summary"] == "Add task: Deep work at 10:00 (reminder 10 min before)"
     assert await _tasks(client, auth_headers) == []  # nothing written yet
 
+    blocked = await _confirm(client, auth_headers, proposal["id"])
+    assert blocked.status_code == 409 and "date and time" in blocked.text  # never a guessed day
+    assert (await _approve(client, auth_headers, proposal["id"])).status_code == 200
     done = await _confirm(client, auth_headers, proposal["id"])
     assert done.status_code == 200, done.text
     (task,) = await _tasks(client, auth_headers)
@@ -217,7 +226,7 @@ async def test_tool_input_is_validated_and_scoped_to_the_user(
         assert r.status_code >= 400, p  # every one of them fails on confirm
         errors.append(r.text)
     assert any("no such task" in e for e in errors)  # someone else's task doesn't exist for you
-    assert any("start_time" in e for e in errors)
+    assert any("date and time" in e for e in errors)  # a task is never made on a guess
     assert any("task_id must be an id" in e for e in errors)
     assert any("nothing to change" in e for e in errors)
     assert (await _tasks(client, other_headers))[0]["title"] == "Secret"
@@ -269,7 +278,9 @@ async def test_photo_of_a_todo_list_becomes_proposals_not_tasks(
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
     assert {t["function"]["name"] for t in call["tools"]} == {"task_create", "habit_create"}
 
-    assert (await _confirm(client, auth_headers, body["proposals"][0]["id"])).status_code == 200
+    first = body["proposals"][0]["id"]
+    assert (await _approve(client, auth_headers, first)).status_code == 200
+    assert (await _confirm(client, auth_headers, first)).status_code == 200
     assert [t["title"] for t in await _tasks(client, auth_headers)] == ["Buy milk"]
 
 
@@ -385,3 +396,78 @@ async def test_a_look_up_alongside_a_proposal_still_waits_for_its_result(
     )
     await _chat(client, auth_headers, fake, "plan my day")
     assert len(fake.calls) >= 2
+
+
+async def test_a_suggested_task_can_be_edited_by_hand_before_it_is_added(
+    client: AsyncClient, auth_headers: Headers
+) -> None:
+    fake = FakeClient().script(
+        "dentist",
+        content="Here.",
+        tool_calls=[
+            {"name": "task_create", "arguments": {"title": "Dentist", "start_time": "15:00"}}
+        ],
+    )
+    events = await _chat(client, auth_headers, fake, "dentist at 3")
+    (proposal,) = events["proposal"]
+    assert proposal["when_confirmed"] is False
+
+    r = await _approve(
+        client,
+        auth_headers,
+        proposal["id"],
+        title="Dentist check-up",
+        start_time="16:30",
+        priority="high",
+    )
+    assert r.status_code == 200, r.text
+    assert (
+        r.json()["summary"]
+        == "Add task: Dentist check-up on 2026-11-02 at 16:30 (reminder 10 min before)"
+    )
+    assert r.json()["when_confirmed"] is True and "_when_confirmed" not in r.json()["args"]
+
+    # clearing the time makes it an all-day task, with no reminder promised
+    r = await client.patch(
+        f"{API}/proposals/{proposal['id']}", json={"start_time": None}, headers=auth_headers
+    )
+    assert r.json()["summary"] == "Add task: Dentist check-up on 2026-11-02"
+
+    assert (await _confirm(client, auth_headers, proposal["id"])).status_code == 200
+    (task,) = await _tasks(client, auth_headers)
+    assert (task["title"], task["date"], task["start_time"], task["priority"]) == (
+        "Dentist check-up",
+        "2026-11-02",
+        None,
+        "high",
+    )
+
+
+async def test_an_edit_needs_a_day_a_sensible_time_and_the_owner(
+    client: AsyncClient, auth_headers: Headers, other_headers: Headers
+) -> None:
+    fake = FakeClient().script(
+        "gym",
+        content="Here.",
+        tool_calls=[{"name": "task_create", "arguments": {"title": "Gym"}}],
+    )
+    events = await _chat(client, auth_headers, fake, "gym")
+    pid = events["proposal"][0]["id"]
+    url = f"{API}/proposals/{pid}"
+    no_day = await client.patch(url, json={"start_time": "09:00"}, headers=auth_headers)
+    assert no_day.status_code == 409 and "date" in no_day.text.lower()
+    assert (
+        await client.patch(
+            url, json={"date": "2026-11-02", "start_time": "25:00"}, headers=auth_headers
+        )
+    ).status_code == 422
+    backwards = await client.patch(
+        url,
+        json={"date": "2026-11-02", "start_time": "10:00", "end_time": "09:00"},
+        headers=auth_headers,
+    )
+    assert backwards.status_code == 409
+    assert (
+        await client.patch(url, json={"date": "2026-11-02"}, headers=other_headers)
+    ).status_code == 409
+    assert (await client.patch(url, json={"notes": "x"}, headers=auth_headers)).status_code == 422

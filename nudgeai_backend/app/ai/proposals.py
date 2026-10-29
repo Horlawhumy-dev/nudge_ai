@@ -30,6 +30,14 @@ log = logging.getLogger(__name__)
 PENDING_TTL = timedelta(hours=24)
 
 
+# Set when the person has seen and approved the date and time of a task the assistant suggested.
+WHEN_CONFIRMED = "_when_confirmed"
+# What a person may change on a suggestion before confirming it.
+EDITABLE: dict[str, tuple[str, ...]] = {
+    "task_create": ("title", "date", "start_time", "end_time", "priority")
+}
+
+
 class ProposalError(Exception):
     """Unknown, expired, already-resolved, or someone else's proposal."""
 
@@ -102,9 +110,13 @@ async def confirm(session: AsyncSession, user_id: UUID, proposal_id: UUID) -> di
     if row.status != "pending":
         raise ProposalError(f"proposal is already {row.status}")
 
+    args = dict(row.arguments or {})
+    if row.tool_name in EDITABLE and not args.pop(WHEN_CONFIRMED, False):
+        # The assistant never decides when something happens: the person approves the day and time.
+        raise ProposalError("Confirm the date and time first.")
     tool = _resolve(session, user_id, row)
     try:
-        result = await tool.run(user_id, dict(row.arguments or {}), session)
+        result = await tool.run(user_id, args, session)
     except ToolError as exc:
         row.status = "failed"
         row.error = exc.message
@@ -118,6 +130,56 @@ async def confirm(session: AsyncSession, user_id: UUID, proposal_id: UUID) -> di
     await session.commit()
     metrics.proposals_total.labels(tool=row.tool_name, outcome="confirmed").inc()
     return {"proposal_id": str(row.id), "tool": row.tool_name, "result": result}
+
+
+async def edit(
+    session: AsyncSession, user_id: UUID, proposal_id: UUID, changes: dict[str, Any]
+) -> ToolProposalRow:
+    """Change a pending suggestion by hand; saving it counts as confirming its date and time.
+
+    A key set to ``None`` is removed (no start time means an all-day task). The day is required.
+    """
+    from pydantic import ValidationError
+
+    from app.schemas.models import TaskCreate
+
+    row = await session.scalar(
+        select(ToolProposalRow).where(
+            ToolProposalRow.id == proposal_id, ToolProposalRow.user_id == user_id
+        )
+    )
+    if row is None:
+        raise ProposalError("no such proposal")
+    if row.status != "pending":
+        raise ProposalError(f"proposal is already {row.status}")
+    allowed = EDITABLE.get(row.tool_name)
+    if allowed is None:
+        raise ProposalError("this suggestion can't be edited")
+
+    args = {k: v for k, v in dict(row.arguments or {}).items() if k != WHEN_CONFIRMED}
+    for key, value in changes.items():
+        if key not in allowed:
+            raise ProposalError(f"{key} can't be edited")
+        if value is None:
+            args.pop(key, None)
+        else:
+            args[key] = value.isoformat() if hasattr(value, "isoformat") else value
+    if not args.get("date"):
+        raise ProposalError("Pick a date.")
+    if not args.get("start_time"):
+        args.pop("end_time", None)  # an all-day task has no end
+    try:
+        TaskCreate(**args)
+    except ValidationError as exc:
+        raise ProposalError(
+            str(exc.errors()[0].get("msg", "invalid")).removeprefix("Value error, ")
+        ) from exc
+
+    tool = _resolve(session, user_id, row)
+    row.arguments = {**args, WHEN_CONFIRMED: True}
+    row.summary = str(await tool.describe(user_id, args, session))[:300]
+    await session.commit()
+    return row
 
 
 async def reject(session: AsyncSession, user_id: UUID, proposal_id: UUID) -> dict[str, Any]:
@@ -168,7 +230,8 @@ def to_schema(row: ToolProposalRow) -> dict[str, Any]:
     return {
         "id": str(row.id),
         "tool": row.tool_name,
-        "args": dict(row.arguments or {}),
+        "args": {k: v for k, v in (row.arguments or {}).items() if k != WHEN_CONFIRMED},
+        "when_confirmed": bool((row.arguments or {}).get(WHEN_CONFIRMED)),
         "summary": row.summary,
         "status": row.status,
         "created_at": row.created_at.isoformat() if row.created_at else None,
