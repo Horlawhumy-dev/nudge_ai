@@ -7,7 +7,15 @@ import contextlib
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 
 from app.ai import live_speech, speech, tts
@@ -158,6 +166,8 @@ async def live(ws: WebSocket) -> None:
     except live_speech.LiveError as exc:
         with contextlib.suppress(Exception):
             await ws.send_json({"type": "error", "code": exc.code, "message": exc.message})
+    except WebSocketDisconnect:
+        pass  # the phone hung up, or the server is restarting: nothing to report
     except Exception:  # noqa: BLE001 - the phone falls back to uploading the recording
         log.exception("live transcription failed")
         with contextlib.suppress(Exception):
