@@ -101,6 +101,8 @@ export default function Tasks() {
         remaining={total - count}
         noun="tasks"
         onPress={() => setShown({ filter, count: count + PAGE_SIZE })}
+        onLess={() => setShown({ filter, count: PAGE_SIZE })}
+        expanded={count > PAGE_SIZE}
       />
       <TaskSheet visible={sheet} onClose={() => setSheet(false)} />
     </Screen>

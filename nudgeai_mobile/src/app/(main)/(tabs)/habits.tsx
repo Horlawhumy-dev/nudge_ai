@@ -62,7 +62,13 @@ export default function Habits() {
       {visible.length > 0 ? (
         <>
           <HabitList habits={paged.visible} />
-          <SeeMore remaining={paged.remaining} noun="habits" onPress={paged.more} />
+          <SeeMore
+            remaining={paged.remaining}
+            noun="habits"
+            onPress={paged.more}
+            onLess={paged.less}
+            expanded={paged.expanded}
+          />
         </>
       ) : (
         <View style={styles.empty}>

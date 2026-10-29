@@ -17,6 +17,16 @@ describe('usePaging', () => {
     expect(result.current.remaining).toBe(0);
   });
 
+  it('goes back to the first page on less()', async () => {
+    const { result } = await renderHook(() => usePaging(items));
+    expect(result.current.expanded).toBe(false);
+    await act(async () => result.current.more());
+    expect(result.current.expanded).toBe(true);
+    await act(async () => result.current.less());
+    expect(result.current.visible).toHaveLength(5);
+    expect(result.current.expanded).toBe(false);
+  });
+
   it('has nothing to page when the list is short', async () => {
     const { result } = await renderHook(() => usePaging([1, 2, 3]));
     expect(result.current.visible).toEqual([1, 2, 3]);

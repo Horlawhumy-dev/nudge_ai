@@ -104,6 +104,8 @@ export default function Home() {
                   remaining={pagedHabits.remaining}
                   noun="habits"
                   onPress={pagedHabits.more}
+                  onLess={pagedHabits.less}
+                  expanded={pagedHabits.expanded}
                 />
               </>
             ) : (
@@ -114,7 +116,13 @@ export default function Home() {
             {todayTasks.length > 0 ? (
               <>
                 <TaskList tasks={pagedTasks.visible} />
-                <SeeMore remaining={pagedTasks.remaining} noun="tasks" onPress={pagedTasks.more} />
+                <SeeMore
+                  remaining={pagedTasks.remaining}
+                  noun="tasks"
+                  onPress={pagedTasks.more}
+                  onLess={pagedTasks.less}
+                  expanded={pagedTasks.expanded}
+                />
               </>
             ) : (
               <Button label="Add a task" variant="outline" onPress={() => setTaskSheet(true)} />

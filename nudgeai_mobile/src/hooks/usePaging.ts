@@ -12,6 +12,9 @@ export function usePaging<T>(items: readonly T[], size = PAGE_SIZE, resetKey?: u
   return {
     visible,
     remaining: Math.max(0, items.length - shown),
+    /** More than the first page is showing. */
+    expanded: shown > size,
+    less: () => setState({ key: resetKey, shown: size }),
     more: () => setState({ key: resetKey, shown: shown + size }),
   };
 }
