@@ -6,7 +6,7 @@ HOST ?= 127.0.0.1
 NGROK_DOMAIN ?=
 TEST_DATABASE_URL ?= postgresql+psycopg://haroffcode@/nudgeai_test?host=/var/run/postgresql
 
-.PHONY: install tunnel run worker worker-once test lint format format-check mypy check db-migrate clean help
+.PHONY: install tunnel run dev worker worker-once test lint format format-check mypy check db-migrate clean help
 
 install: ## Create the virtualenv and install the app with its dev tools
 	python3 -m venv .venv
@@ -14,6 +14,9 @@ install: ## Create the virtualenv and install the app with its dev tools
 
 run: ## Run the API on :8079 (HOST=0.0.0.0 to reach it from a phone)
 	.venv/bin/uvicorn app.main:app --host $(HOST) --port 8079
+
+dev: ## Run the API and restart it on code or .env changes (a plain `make run` keeps old settings)
+	.venv/bin/uvicorn app.main:app --host $(HOST) --port 8079 --reload --reload-include ".env"
 
 tunnel: ## Expose the API at https://$(NGROK_DOMAIN) (make tunnel NGROK_DOMAIN=...); keep `make run` going too
 	@test -n "$(NGROK_DOMAIN)" || (echo "Usage: make tunnel NGROK_DOMAIN=<your-name>.ngrok-free.app" && exit 1)
