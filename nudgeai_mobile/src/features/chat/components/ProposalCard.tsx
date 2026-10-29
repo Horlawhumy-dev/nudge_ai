@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { Icon, Text } from '@/components/ui';
+import { Icon } from '@/components/ui/Icon';
+import { Text } from '@/components/ui/Text';
 import { haptics } from '@/lib/haptics';
 import { colors, radius } from '@/theme';
 

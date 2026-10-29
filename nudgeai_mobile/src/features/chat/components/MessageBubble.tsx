@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text as RNText, View } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { Text } from '@/components/ui/Text';
+import { useChatStore } from '@/store/useChatStore';
 import { colors, radius, shadows } from '@/theme';
 
 import type { ChatMessage } from '../types';
@@ -8,13 +9,18 @@ import { plainText } from '../markdown';
 import { ChatMarkdown } from './ChatMarkdown';
 import { ProposalCard } from './ProposalCard';
 
-type Props = {
-  message: ChatMessage;
-  onProposal?: (proposalId: string, action: 'confirm' | 'reject') => void;
-  onRetry?: () => void;
-};
+/**
+ * One chat message. The Confirm / Not now buttons on a proposal and "Try again" on a failed reply
+ * act on the chat store directly, so every screen that shows messages (text chat, Nudge Voice)
+ * gets working buttons without having to wire them up.
+ */
+export function MessageBubble({ message }: { message: ChatMessage }) {
+  const resolveProposal = useChatStore((s) => s.resolveProposal);
+  const retry = useChatStore((s) => s.retry);
+  const onRetry = () => void retry(message.id);
+  const onProposal = (proposalId: string, action: 'confirm' | 'reject') =>
+    void resolveProposal(message.id, proposalId, action);
 
-export function MessageBubble({ message, onProposal, onRetry }: Props) {
   if (message.role === 'assistant') {
     return (
       <View style={styles.assistant} accessibilityLabel={`Nudge: ${plainText(message.text)}`}>
@@ -22,7 +28,7 @@ export function MessageBubble({ message, onProposal, onRetry }: Props) {
           text={message.text}
           color={message.failed ? colors.textSecondary : undefined}
         />
-        {message.failed && onRetry ? (
+        {message.failed ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Try again"
@@ -39,8 +45,8 @@ export function MessageBubble({ message, onProposal, onRetry }: Props) {
           <ProposalCard
             key={p.id}
             proposal={p}
-            onConfirm={() => onProposal?.(p.id, 'confirm')}
-            onReject={() => onProposal?.(p.id, 'reject')}
+            onConfirm={() => onProposal(p.id, 'confirm')}
+            onReject={() => onProposal(p.id, 'reject')}
           />
         ))}
       </View>
