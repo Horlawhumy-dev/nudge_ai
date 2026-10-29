@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.db.models import Habit, Task, User
 from app.schemas.models import HabitCreate, TaskCreate
 from app.services import core_service, plan_service
@@ -184,7 +185,10 @@ class TaskCreateTool:
     async def describe(self, user_id: UUID, args: dict[str, Any], session: Any) -> str:
         when = f" at {args['start_time']}" if args.get("start_time") else ""
         on = f" on {args['date']}" if args.get("date") else ""
-        return f"Add task: {str(args.get('title', '')).strip()[:100]}{on}{when}"
+        lead = get_settings().task_reminder_lead_minutes
+        # Only a task with a start time gets a reminder, so only then does the card promise one.
+        reminder = f" (reminder {lead} min before)" if args.get("start_time") else ""
+        return f"Add task: {str(args.get('title', '')).strip()[:100]}{on}{when}{reminder}"
 
     async def run(self, user_id: UUID, args: dict[str, Any], session: Any) -> dict[str, Any]:
         try:

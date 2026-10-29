@@ -47,6 +47,18 @@ FEW_SHOTS: tuple[dict[str, str], ...] = (
     },
 )
 
+
+def reminder_facts() -> str:
+    """What reminders exist, so the assistant promises exactly that and nothing more."""
+    from app.core.config import get_settings
+
+    lead = get_settings().task_reminder_lead_minutes
+    return (
+        f"A task with a start time gets one reminder about {lead} minutes before it starts. An "
+        "all-day task gets none, and there are no other reminders for tasks, so never promise more."
+    )
+
+
 PROPOSAL_NOTICE = (
     "You cannot change anything directly. Tools that write return a proposal the "
     "user must confirm. Say what you are proposing, not what you have done."
@@ -63,6 +75,7 @@ def system_prompt(*, tone: str | None = None, has_tools: bool = True) -> str:
         parts.append(f"Current tone setting: {tone}.")
     if has_tools:
         parts.append(PROPOSAL_NOTICE)
+        parts.append(reminder_facts())
     return "\n\n".join(parts)
 
 

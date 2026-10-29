@@ -65,7 +65,7 @@ async def test_creating_a_task_by_chat_is_a_proposal_until_confirmed(
     events = await _chat(client, auth_headers, fake, "add deep work at 10")
     (proposal,) = events["proposal"]
     assert proposal["tool"] == "task_create" and proposal["status"] == "pending"
-    assert proposal["summary"] == "Add task: Deep work at 10:00"
+    assert proposal["summary"] == "Add task: Deep work at 10:00 (reminder 10 min before)"
     assert await _tasks(client, auth_headers) == []  # nothing written yet
 
     done = await _confirm(client, auth_headers, proposal["id"])
