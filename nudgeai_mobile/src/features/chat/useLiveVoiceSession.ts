@@ -35,6 +35,8 @@ export function useLiveVoiceSession() {
   const limit = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // False once the screen is gone, so a late permission prompt or upload doesn't toast over Home.
   const alive = useRef(true);
+  // Said once per visit, so a silent reply is explained without nagging on every turn.
+  const toldVoiceIsOff = useRef(false);
 
   const { stream } = useAudioStream({
     sampleRate: SPEECH_SAMPLE_RATE,
@@ -92,7 +94,13 @@ export function useLiveVoiceSession() {
     setPhase('generating');
     const reply = await send(text, { via: 'voice' });
     setPhase('idle');
-    if (reply && !reply.failed && readRepliesAloud && alive.current) void say(reply.text, tone);
+    if (!reply || reply.failed || !alive.current) return;
+    if (readRepliesAloud) {
+      void say(reply.text, tone);
+    } else if (!toldVoiceIsOff.current) {
+      toldVoiceIsOff.current = true;
+      toast.show('Spoken replies are off. Turn on “Voice” in Settings → Notifications.');
+    }
   }, [send, stopStream, readRepliesAloud, say, tone]);
 
   const listen = useCallback(async () => {

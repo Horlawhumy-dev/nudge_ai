@@ -130,6 +130,8 @@ describe('live voice session', () => {
     await act(async () => result.current.toggleMic());
     await waitFor(() => expect(result.current.phase).toBe('idle'));
     expect(speak).not.toHaveBeenCalled();
+    // and it says why, instead of leaving the person wondering
+    expect(useToastStore.getState().current?.message).toMatch(/Spoken replies are off/);
   });
 
   it('does not read out an error message', async () => {
