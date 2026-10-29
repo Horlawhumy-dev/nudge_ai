@@ -3,7 +3,7 @@ import * as Speech from 'expo-speech';
 
 import { ApiError } from '../api/errors';
 import { speechApi } from '../api/endpoints/speech';
-import { resetSpeakerState, speak } from '../speaker';
+import { resetSpeakerState, speak, startSpeech } from '../speaker';
 
 const mockFiles: { uri: string; deleted: boolean; written?: Uint8Array }[] = [];
 let mockDemo = false;
@@ -87,6 +87,9 @@ beforeEach(() => {
   resetSpeakerState();
 });
 
+/** Let every pending promise run: the pipeline works in the background. */
+const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+
 describe('speak', () => {
   it('plays the server voice from a temporary file and cleans up when it ends', async () => {
     const player = fakePlayer();
@@ -94,6 +97,7 @@ describe('speak', () => {
     const onEnd = jest.fn();
 
     await speak('Do **deep work** now', { tone: 'firm', onEnd });
+    await settle();
 
     expect(synthesize).toHaveBeenCalledWith('Do deep work now'); // no asterisks reach the voice
     expect(mockFiles[0].written).toEqual(new Uint8Array([1, 2, 3]));
@@ -104,6 +108,7 @@ describe('speak', () => {
     expect(mockFiles[0].deleted).toBe(false);
 
     player.finish();
+    await settle();
     expect(mockFiles[0].deleted).toBe(true);
     expect(player.remove).toHaveBeenCalled();
     expect(onEnd).toHaveBeenCalledTimes(1);
@@ -114,9 +119,11 @@ describe('speak', () => {
     synthesize.mockResolvedValue(new Uint8Array([1]));
     const onEnd = jest.fn();
     const handle = await speak('Hello', { onEnd });
+    await settle();
     handle.stop();
     handle.stop();
     player.finish(); // a late "finished" event must not double-clean
+    await settle();
     expect(mockFiles[0].deleted).toBe(true);
     expect(onEnd).toHaveBeenCalledTimes(1);
   });
@@ -124,6 +131,7 @@ describe('speak', () => {
   it('falls back to the phone’s voice when the server voice is not set up', async () => {
     synthesize.mockRejectedValue(new ApiError('spoken replies are not set up on the server', 503));
     await speak('Hello Ada', { tone: 'gentle' });
+    await settle();
     expect(Speech.speak).toHaveBeenCalledTimes(1);
     const [text, opts] = (Speech.speak as jest.Mock).mock.calls[0];
     expect(text).toBe('Hello Ada');
@@ -133,7 +141,9 @@ describe('speak', () => {
   it('does not wait on a dead server voice for every line', async () => {
     synthesize.mockRejectedValue(new ApiError('down', 502));
     await speak('First');
+    await settle();
     await speak('Second');
+    await settle();
     expect(synthesize).toHaveBeenCalledTimes(1); // the second line went straight to the phone
     expect(Speech.speak).toHaveBeenCalledTimes(2);
   });
@@ -144,12 +154,14 @@ describe('speak', () => {
       throw new Error('no audio output');
     });
     await speak('Hello');
+    await settle();
     expect(Speech.speak).toHaveBeenCalledTimes(1);
   });
 
   it('uses only the phone’s voice in demo mode, with no network call', async () => {
     mockDemo = true;
     await speak('Hello');
+    await settle();
     expect(synthesize).not.toHaveBeenCalled();
     expect(Speech.speak).toHaveBeenCalledTimes(1);
   });
@@ -157,6 +169,7 @@ describe('speak', () => {
   it('says nothing, and reports it ended, for empty text', async () => {
     const onEnd = jest.fn();
     await speak('  ', { onEnd });
+    await settle();
     expect(onEnd).toHaveBeenCalledTimes(1);
     expect(synthesize).not.toHaveBeenCalled();
     expect(Speech.speak).not.toHaveBeenCalled();
@@ -166,67 +179,151 @@ describe('speak', () => {
     const player = fakePlayer();
     synthesize.mockResolvedValue(new Uint8Array([1]));
     // assigning would throw "Cannot assign to property 'playbackRate' which has only a getter"
-    await expect(speak('Hello', { tone: 'firm' })).resolves.toBeDefined();
+    await speak('Hello', { tone: 'firm' });
+    await settle();
     expect(Speech.speak).not.toHaveBeenCalled();
     expect(player.play).toHaveBeenCalled();
   });
+});
 
-  describe('a long reply', () => {
-    const LONG =
-      'Done, I added your dentist appointment for tomorrow at 3 pm. ' +
-      'I will remind you ten minutes before it starts, and I have also kept your evening free. ' +
-      'Anything else you would like me to arrange for the day?';
+describe('startSpeech: a reply that is still being written', () => {
+  const S1 = 'Okay, I have added your dentist visit for tomorrow at three.';
+  const S2 = 'I will remind you ten minutes before it starts, so you are ready.';
+  const S3 = 'Is there anything else you would like me to arrange for the day?';
 
-    it('asks for every part at once, and starts with the short first one', async () => {
-      const players = playersPerChunk();
-      synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
-      await speak(LONG);
-      expect(synthesize).toHaveBeenCalledTimes(2);
-      expect(synthesize.mock.calls[0][0].length).toBeLessThan(synthesize.mock.calls[1][0].length);
-      expect(players).toHaveLength(1); // only the first part is playing so far
-      expect(players[0].play).toHaveBeenCalled();
-    });
+  it('starts voicing the first sentence before the rest has even been written', async () => {
+    const players = playersPerChunk();
+    synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
+    const session = startSpeech();
 
-    it('plays the parts back to back and finishes once, at the end', async () => {
-      const players = playersPerChunk();
-      synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
-      const onEnd = jest.fn();
-      await speak(LONG, { onEnd });
+    session.push('Okay, I have added your dentist visit ');
+    session.push('for tomorrow at three. ');
+    await settle();
+    expect(synthesize).not.toHaveBeenCalled(); // the sentence might not be over yet
 
-      players[0].finish();
-      await new Promise((r) => setTimeout(r, 0));
-      expect(players).toHaveLength(2);
-      expect(players[1].play).toHaveBeenCalled();
-      expect(onEnd).not.toHaveBeenCalled(); // still talking
+    session.push('I will remind'); // the next sentence has begun, so the first is certainly done
+    await settle();
+    expect(synthesize).toHaveBeenCalledTimes(1);
+    expect(synthesize).toHaveBeenCalledWith(S1);
+    expect(players).toHaveLength(1);
+    expect(players[0].play).toHaveBeenCalled(); // and it is already playing
+  });
 
-      players[1].finish();
-      expect(onEnd).toHaveBeenCalledTimes(1);
-      expect(mockFiles.every((f) => f.deleted)).toBe(true);
-    });
+  it('plays sentences in order, back to back, and ends once after the last', async () => {
+    const players = playersPerChunk();
+    synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
+    const onEnd = jest.fn();
+    const session = startSpeech({ onEnd });
 
-    it('finishes in the phone’s voice if a later part fails, instead of stopping mid-reply', async () => {
-      const players = playersPerChunk();
-      synthesize
-        .mockResolvedValueOnce(new Uint8Array([1]))
-        .mockRejectedValueOnce(new ApiError('quota exceeded', 502));
-      const onEnd = jest.fn();
-      await speak(LONG, { onEnd });
-      players[0].finish();
-      await new Promise((r) => setTimeout(r, 0));
-      expect(Speech.speak).toHaveBeenCalledTimes(1);
-      expect((Speech.speak as jest.Mock).mock.calls[0][0]).toMatch(/^I will remind you/);
-    });
+    session.push(`${S1} ${S2} ${S3}`);
+    session.end();
+    await settle();
+    expect(players).toHaveLength(1);
+    players[0].finish();
+    await settle();
+    expect(players).toHaveLength(2);
+    expect(onEnd).not.toHaveBeenCalled();
+    players[1].finish();
+    await settle();
+    players[2]?.finish();
+    await settle();
+    expect(synthesize.mock.calls.map((c) => c[0])).toEqual([S1, S2, S3]);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(mockFiles.every((f) => f.deleted)).toBe(true);
+  });
 
-    it('stopping part-way ends everything and never starts the next part', async () => {
-      const players = playersPerChunk();
-      synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
-      const onEnd = jest.fn();
-      const handle = await speak(LONG, { onEnd });
-      handle.stop();
-      await new Promise((r) => setTimeout(r, 0));
-      expect(players).toHaveLength(1);
-      expect(onEnd).toHaveBeenCalledTimes(1);
-      expect(mockFiles[0].deleted).toBe(true);
-    });
+  it('never has more than two sentences being voiced at once', async () => {
+    playersPerChunk();
+    const release: (() => void)[] = [];
+    let open = 0;
+    let peak = 0;
+    synthesize.mockImplementation(
+      () =>
+        new Promise<Uint8Array<ArrayBuffer>>((resolve) => {
+          open += 1;
+          peak = Math.max(peak, open);
+          release.push(() => {
+            open -= 1;
+            resolve(new Uint8Array([1]));
+          });
+        })
+    );
+    const session = startSpeech();
+    session.push(`${S1} ${S2} ${S3} And one more sentence to be spoken, to make four in all.`);
+    session.end();
+    await settle();
+    expect(peak).toBe(2); // ElevenLabs' free plan refuses more
+    release.forEach((r) => r());
+  });
+
+  it('plays what has arrived while later sentences are still being voiced', async () => {
+    const players = playersPerChunk();
+    const second = { resolve: (_: Uint8Array<ArrayBuffer>) => undefined as void };
+    synthesize
+      .mockResolvedValueOnce(new Uint8Array([1]))
+      .mockReturnValueOnce(new Promise<Uint8Array<ArrayBuffer>>((r) => (second.resolve = r)));
+    const session = startSpeech();
+    session.push(`${S1} ${S2} Next`);
+    await settle();
+    expect(players).toHaveLength(1); // sentence one plays without waiting for sentence two
+    players[0].finish();
+    await settle();
+    expect(players).toHaveLength(1); // two isn't ready: wait for it, don't skip it
+    second.resolve(new Uint8Array([2]));
+    await settle();
+    expect(players).toHaveLength(2);
+  });
+
+  it('keeps going in the phone’s voice if one sentence fails', async () => {
+    const players = playersPerChunk();
+    synthesize
+      .mockResolvedValueOnce(new Uint8Array([1]))
+      .mockRejectedValueOnce(new ApiError('quota exceeded', 502));
+    const session = startSpeech();
+    session.push(`${S1} ${S2} ${S3}`);
+    session.end();
+    await settle();
+    players[0].finish();
+    await settle();
+    expect((Speech.speak as jest.Mock).mock.calls[0][0]).toBe(S2);
+  });
+
+  it('says only the gist of a very long reply, cut at a sentence', async () => {
+    playersPerChunk();
+    synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
+    const long = Array.from(
+      { length: 30 },
+      (_, i) => `This is sentence number ${i + 1} of a long reply.`
+    ).join(' ');
+    const session = startSpeech();
+    session.push(long);
+    session.end();
+    await settle();
+    const spoken = synthesize.mock.calls.map((c) => c[0]).join(' ');
+    expect(spoken.length).toBeLessThanOrEqual(280);
+    expect(spoken.endsWith('.')).toBe(true);
+  });
+
+  it('stops everything when told to, and ignores text that arrives afterwards', async () => {
+    const players = playersPerChunk();
+    synthesize.mockImplementation(async (t) => new Uint8Array([t.length]));
+    const onEnd = jest.fn();
+    const session = startSpeech({ onEnd });
+    session.push(`${S1} ${S2} Next`);
+    await settle();
+    session.stop();
+    session.push(`${S3} And more.`);
+    session.end();
+    await settle();
+    expect(players).toHaveLength(1);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(mockFiles[0].deleted).toBe(true);
+  });
+
+  it('reports the end even if nothing was ever said', async () => {
+    const onEnd = jest.fn();
+    const session = startSpeech({ onEnd });
+    session.end();
+    expect(onEnd).toHaveBeenCalledTimes(1);
   });
 });
