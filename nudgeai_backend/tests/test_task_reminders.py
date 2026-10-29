@@ -333,3 +333,14 @@ def test_the_assistant_is_told_exactly_which_reminders_exist() -> None:
     assert "one reminder about 10 minutes before" in prompt
     assert "never promise more" in prompt
     assert "reminder" not in system_prompt(tone="gentle", has_tools=False)
+
+
+# ------------------------------------------------------- asking when, never guessing
+
+
+def test_the_assistant_must_ask_for_a_missing_day_or_time_and_knows_today() -> None:
+    now = datetime(2026, 11, 4, 9, 30, tzinfo=UTC)
+    prompt = system_prompt(tone="gentle", has_tools=True, now=now)
+    assert "Never guess a date or time" in prompt
+    assert "Wednesday 2026-11-04 09:30" in prompt
+    assert "Never guess" not in system_prompt(tone="gentle", has_tools=False)

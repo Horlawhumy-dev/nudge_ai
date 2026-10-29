@@ -46,6 +46,11 @@ def user_zone(user: User) -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
+def local_now(user: User, now: datetime | None = None) -> datetime:
+    """The current moment on the user's wall clock."""
+    return (now or datetime.now(UTC)).astimezone(user_zone(user))
+
+
 def local_today(user: User, now: datetime | None = None) -> date:
     """Today's calendar date where the user is, not in UTC."""
     return (now or datetime.now(UTC)).astimezone(user_zone(user)).date()

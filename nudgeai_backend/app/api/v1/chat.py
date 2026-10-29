@@ -23,7 +23,7 @@ from app.db.models import ChatMessage, Preference, ToolProposal
 from app.models.budgets import seconds_until_reset
 from app.models.client import Delta
 from app.models.router import RouteRequest
-from app.services import conversation_service, memory_service, trace_service
+from app.services import conversation_service, core_service, memory_service, trace_service
 from app.services.core_service import NotFound
 from app.tools import calendar as calendar_tools
 from app.tools import memory as memory_tools
@@ -174,6 +174,7 @@ async def chat(
         retrieved=retrieved,
         tone=tone,
         has_tools=True,
+        now=core_service.local_now(user),
     )
     registry = _build_registry(user_id, session)
     await _persist(

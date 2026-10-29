@@ -7,6 +7,7 @@ executor can be tested against a known prompt.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 PERSONA = (
@@ -59,6 +60,25 @@ def reminder_facts() -> str:
     )
 
 
+SCHEDULING_RULES = (
+    "Never guess a date or time. Before calling task_create, task_update or habit_create, the user "
+    "must have said when: the day, and the time (or that it is all day), or for a habit the time "
+    'of day and how often. If any of that is missing or vague ("later", "soon", "sometime"), '
+    "ask for it in one short question and do not call the tool yet. When they give it, turn words "
+    'like "tomorrow" or "Friday" into a date using the current date below, and say the full '
+    'day, date and time back in your reply (for example "Friday 6 Nov at 3:00 pm") so they can '
+    "check it before confirming."
+)
+
+
+def clock_facts(now: datetime) -> str:
+    """The user's current local date and time, so "tomorrow" means the right day."""
+    return (
+        f"Right now, where the user is, it is {now:%A %Y-%m-%d} {now:%H:%M} "
+        f"({now.strftime('%-d %b')}). Use it only to resolve relative days."
+    )
+
+
 PROPOSAL_NOTICE = (
     "You cannot change anything directly. Tools that write return a proposal the "
     "user must confirm. Say what you are proposing, not what you have done."
@@ -69,13 +89,18 @@ def _history_to_messages(history: list[dict[str, str]]) -> list[dict[str, Any]]:
     return [{"role": h["role"], "content": h["content"]} for h in history]
 
 
-def system_prompt(*, tone: str | None = None, has_tools: bool = True) -> str:
+def system_prompt(
+    *, tone: str | None = None, has_tools: bool = True, now: datetime | None = None
+) -> str:
     parts = [PERSONA, TONE_RULES, FORMAT_RULES]
     if tone:
         parts.append(f"Current tone setting: {tone}.")
     if has_tools:
         parts.append(PROPOSAL_NOTICE)
         parts.append(reminder_facts())
+        parts.append(SCHEDULING_RULES)
+        if now is not None:
+            parts.append(clock_facts(now))
     return "\n\n".join(parts)
 
 
@@ -87,6 +112,7 @@ def build_messages(
     retrieved: list[dict[str, Any]] | None = None,
     tone: str | None = None,
     has_tools: bool = True,
+    now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Assemble the full message list, oldest first.
 
@@ -94,7 +120,7 @@ def build_messages(
     it reads as context, not as something the user just said.
     """
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt(tone=tone, has_tools=has_tools)}
+        {"role": "system", "content": system_prompt(tone=tone, has_tools=has_tools, now=now)}
     ]
 
     if retrieved:

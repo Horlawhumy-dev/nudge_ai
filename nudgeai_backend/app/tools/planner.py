@@ -161,8 +161,9 @@ class HabitsListTool:
 class TaskCreateTool:
     name = "task_create"
     description = (
-        "Add a task for the user. Omit date for today and omit start_time for an all-day task. "
-        "The user confirms before it is created."
+        "Add a task for the user. Only call this once the user has said the day and the time (or "
+        "that it is all day); omit start_time only for an all-day task. The user confirms before "
+        "it is created."
     )
     mutating = True
 
@@ -297,8 +298,9 @@ class TaskCompleteTool:
 class HabitCreateTool:
     name = "habit_create"
     description = (
-        "Create a habit. time_of_day is morning, afternoon or evening; frequency is daily, "
-        "weekdays or weekly. The user confirms before it is created."
+        "Create a habit once the user has said when and how often. time_of_day is morning, "
+        "afternoon or evening; frequency is daily, weekdays or weekly. The user confirms before "
+        "it is created."
     )
     mutating = True
 
