@@ -5,7 +5,7 @@ import * as Speech from 'expo-speech';
 import { DEMO_MODE } from '@/constants/env';
 import type { ToneId } from '@/features/onboarding/data';
 import { deliveryFor, spokenText } from '@/features/settings/voice';
-import { speakableText } from '@/lib/speakable';
+import { speakableText, splitForSpeech } from '@/lib/speakable';
 
 import { speechApi } from './api/endpoints/speech';
 
@@ -54,8 +54,9 @@ async function playBytes(bytes: Uint8Array, tone: ToneId, onEnd: () => void): Pr
 
   await setAudioModeAsync({ playsInSilentMode: true });
   const player = createAudioPlayer({ uri: file.uri });
-  player.shouldCorrectPitch = true;
-  player.playbackRate = deliveryFor(tone).rate;
+  // `playbackRate` is read-only on the player; the speed is set with a method.
+  const { rate } = deliveryFor(tone);
+  if (rate !== 1) player.setPlaybackRate(rate, 'high');
 
   let ended = false;
   const end = () => {
@@ -98,7 +99,12 @@ export async function speak(markdown: string, options: Options = {}): Promise<Sp
 
   if (!DEMO_MODE && Date.now() >= serverVoiceDownUntil) {
     try {
-      const handle = await playBytes(await speechApi.synthesize(text), tone, onEnd);
+      // Every chunk is requested at once; the short first one is back well before the whole
+      // reply would be, so speech starts sooner and the rest is ready when it is needed.
+      const chunks = splitForSpeech(text);
+      const audio = chunks.map((chunk) => speechApi.synthesize(chunk));
+      audio.forEach((request) => request.catch(() => undefined)); // handled where each is awaited
+      const handle = await playSequence(await audio[0], audio, chunks, tone, onEnd);
       if (__DEV__) console.log('[nudge] speaking with the ElevenLabs voice');
       return handle;
     } catch (e) {
@@ -112,6 +118,53 @@ export async function speak(markdown: string, options: Options = {}): Promise<Sp
     );
   }
   return speakOnDevice(text, tone, onEnd);
+}
+
+/**
+ * Play the chunks one after another. Chunk 0 is already in hand; the others are still in flight
+ * and are awaited only when their turn comes. If one fails part-way, the rest of the reply is
+ * finished in the phone's voice instead of being cut off.
+ */
+async function playSequence(
+  first: Uint8Array,
+  audio: Promise<Uint8Array>[],
+  chunks: string[],
+  tone: ToneId,
+  onEnd: () => void
+): Promise<Speaking> {
+  let finished = false;
+  let current: Speaking | null = null;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    onEnd();
+  };
+
+  const play = async (bytes: Uint8Array, index: number): Promise<void> => {
+    current = await playBytes(bytes, tone, () => {
+      if (finished) return;
+      const next = index + 1;
+      if (next >= audio.length) return finish();
+      void audio[next].then(
+        (data) => (finished ? undefined : play(data, next).catch(() => rescue(next))),
+        () => rescue(next)
+      );
+    });
+  };
+  const rescue = (from: number) => {
+    if (finished) return;
+    current = speakOnDevice(chunks.slice(from).join(' '), tone, finish);
+  };
+
+  await play(first, 0);
+  return {
+    stop: () => {
+      if (finished) return;
+      finished = true; // first, so ending the current chunk can't start the next one
+      current?.stop();
+      onEnd();
+    },
+  };
 }
 
 /** Test helper: forget that the server voice failed. */
