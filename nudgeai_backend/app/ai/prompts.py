@@ -23,6 +23,15 @@ TONE_RULES = (
     "confirmation rather than as something already done."
 )
 
+# The app shows replies in a chat bubble that renders bold, bullets and numbered lists, but not
+# headings or tables. Kept short on purpose: this is paid on every single turn.
+FORMAT_RULES = (
+    "You are writing for a phone screen. Keep replies short: a sentence or two, or a short list "
+    "of at most five items. You may use **bold** for the one or two words that matter, '- ' "
+    "for bullet points and '1.' for ordered steps. Never use headings, tables, horizontal rules "
+    "or code blocks, and do not add emoji unless the user does."
+)
+
 # Kept short on purpose: few-shots are paid on every single turn.
 FEW_SHOTS: tuple[dict[str, str], ...] = (
     {
@@ -49,7 +58,7 @@ def _history_to_messages(history: list[dict[str, str]]) -> list[dict[str, Any]]:
 
 
 def system_prompt(*, tone: str | None = None, has_tools: bool = True) -> str:
-    parts = [PERSONA, TONE_RULES]
+    parts = [PERSONA, TONE_RULES, FORMAT_RULES]
     if tone:
         parts.append(f"Current tone setting: {tone}.")
     if has_tools:
