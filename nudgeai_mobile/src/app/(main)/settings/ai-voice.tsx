@@ -36,7 +36,7 @@ export default function AiVoiceAndTone() {
         ))}
       </SectionCard>
 
-      <VoicePreview quote={PREVIEW[selected.id](name)} />
+      <VoicePreview quote={PREVIEW[selected.id](name)} tone={selected.id} />
 
       <SectionCard title="Preferences">
         <ListRow

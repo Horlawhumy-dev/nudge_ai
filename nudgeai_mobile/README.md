@@ -149,6 +149,8 @@ saved), and the photo button reads tasks off a picture. In demo mode it gives sc
 reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
 question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
 
+**One non-Meta piece:** Settings → AI voice & tone → "Preview your Nudge" reads the sample reminder aloud with the phone's built-in text-to-speech (`expo-speech`), because Meta offers speech-to-text but no speech output. Nothing is sent anywhere, and no other screen speaks.
+
 ## Native-only behaviour to check on a device
 
 Haptics, swipe-to-delete rows, OS notification permission, the photo picker and the microphone can't be
