@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { File } from 'expo-file-system';
 
 import { api } from '../client';
 import type { ApiOnboarding, ApiUser } from '../types';
@@ -71,8 +72,8 @@ export const profileApi = {
       }
     }
 
-    const blob = await (await fetch(uri)).blob();
-    const { data } = await api.post<ApiUser>('/profile/avatar', blob, {
+    const bytes = await new File(uri).bytes(); // the file itself, not a fetch of its uri
+    const { data } = await api.post<ApiUser>('/profile/avatar', bytes, {
       headers: { 'Content-Type': mime },
       timeout: UPLOAD_TIMEOUT_MS,
       onUploadProgress: (e) => onProgress?.(e.progress ?? 0),

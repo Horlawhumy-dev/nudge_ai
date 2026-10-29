@@ -61,7 +61,16 @@ export default function Profile() {
       />
 
       <View style={styles.identity}>
-        <UserAvatar size={72} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Change profile photo"
+          onPress={() => router.push('/settings/edit-profile')}
+        >
+          <UserAvatar size={72} />
+          <View style={styles.camera}>
+            <Icon name="camera" size={14} color={colors.white} />
+          </View>
+        </Pressable>
         <View style={styles.identityTexts}>
           <Text variant="heading">{user?.name}</Text>
           <Text variant="bodyLarge" color={colors.textSecondary} numberOfLines={1}>
@@ -143,6 +152,19 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
+  camera: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: { gap: 20, paddingTop: 8 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   identityTexts: { flex: 1, gap: 4 },

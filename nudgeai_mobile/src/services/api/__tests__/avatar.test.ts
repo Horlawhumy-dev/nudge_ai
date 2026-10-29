@@ -4,6 +4,10 @@ import { api } from '../client';
 import { profileApi } from '../endpoints/profile';
 
 jest.mock('../client', () => ({ api: { post: jest.fn(), put: jest.fn(), delete: jest.fn() } }));
+const mockBytes = new Uint8Array([1, 2, 3]);
+jest.mock('expo-file-system', () => ({
+  File: jest.fn().mockImplementation(() => ({ bytes: async () => mockBytes })),
+}));
 jest.mock('axios', () => ({ __esModule: true, default: { post: jest.fn() } }));
 
 const post = jest.mocked(api.post);
@@ -23,7 +27,6 @@ const cloudinaryIntent = {
 
 beforeEach(() => {
   jest.resetAllMocks();
-  (globalThis as { fetch?: unknown }).fetch = jest.fn(async () => ({ blob: async () => 'BLOB' }));
 });
 
 describe('uploadAvatar', () => {
@@ -57,7 +60,7 @@ describe('uploadAvatar', () => {
 
     expect(post).toHaveBeenLastCalledWith(
       '/profile/avatar',
-      'BLOB',
+      mockBytes,
       expect.objectContaining({
         headers: { 'Content-Type': 'image/jpeg' },
       })
@@ -72,7 +75,7 @@ describe('uploadAvatar', () => {
     expect(direct).not.toHaveBeenCalled();
     expect(post).toHaveBeenLastCalledWith(
       '/profile/avatar',
-      'BLOB',
+      mockBytes,
       expect.objectContaining({
         headers: { 'Content-Type': 'image/webp' },
       })
