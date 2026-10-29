@@ -11,6 +11,8 @@ import { HomeHeader } from '@/features/home/components/HomeHeader';
 import { ListSection } from '@/features/home/components/ListSection';
 import { NudgeBanner } from '@/features/home/components/NudgeBanner';
 import { ProgressCard } from '@/features/home/components/ProgressCard';
+import { SeeMore } from '@/features/home/components/SeeMore';
+import { usePaging } from '@/hooks/usePaging';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskSheet } from '@/features/tasks/components/TaskSheet';
 import { doneCount, isForToday } from '@/features/tasks/utils';
@@ -40,6 +42,8 @@ export default function Home() {
   const todayTasks = tasks
     .filter((t) => isForToday(t, now))
     .sort((a, b) => Number(b.done) - Number(a.done));
+  const pagedHabits = usePaging(habits);
+  const pagedTasks = usePaging(todayTasks);
   const message = allDoneToday(habits)
     ? `All habits done today, ${name}. Amazing work! 🎉`
     : streak > 0
@@ -94,14 +98,24 @@ export default function Home() {
             onAdd={() => setHabitSheet(true)}
           >
             {habits.length > 0 ? (
-              <HabitList habits={habits} />
+              <>
+                <HabitList habits={pagedHabits.visible} />
+                <SeeMore
+                  remaining={pagedHabits.remaining}
+                  noun="habits"
+                  onPress={pagedHabits.more}
+                />
+              </>
             ) : (
               <Button label="Add a habit" variant="outline" onPress={() => setHabitSheet(true)} />
             )}
           </ListSection>
           <ListSection title="To-do list" addLabel="Add task" onAdd={() => setTaskSheet(true)}>
             {todayTasks.length > 0 ? (
-              <TaskList tasks={todayTasks} />
+              <>
+                <TaskList tasks={pagedTasks.visible} />
+                <SeeMore remaining={pagedTasks.remaining} noun="tasks" onPress={pagedTasks.more} />
+              </>
             ) : (
               <Button label="Add a task" variant="outline" onPress={() => setTaskSheet(true)} />
             )}
