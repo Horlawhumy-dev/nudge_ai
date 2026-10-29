@@ -431,7 +431,10 @@ class Preference(Base):
     quiet_end: Mapped[str | None] = mapped_column(String(5))
     quiet_repeat_days: Mapped[list[int] | None] = mapped_column(JSONB)
     digest_time: Mapped[str | None] = mapped_column(String(5))
-    voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Spoken replies ("Voice" in Settings -> Notification). On by default; the app mirrors it.
+    voice_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     # Notification switches (Settings -> Notification).
     push_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False

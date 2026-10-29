@@ -261,6 +261,19 @@ async def test_onboarding_patch_changes_only_what_was_sent(
     assert bad.status_code == 422
 
 
+async def test_spoken_replies_are_on_for_a_new_account(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """The app copies this as its "Voice" switch; off by default meant nothing was ever spoken."""
+    prefs = (await client.get(f"{API}/preferences", headers=auth_headers)).json()
+    assert prefs["voice_enabled"] is True
+    # and a person can still switch it off
+    off = await client.patch(
+        f"{API}/preferences", json={"voice_enabled": False}, headers=auth_headers
+    )
+    assert off.json()["voice_enabled"] is False
+
+
 async def test_onboarding_can_be_read_before_and_after_setup(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
