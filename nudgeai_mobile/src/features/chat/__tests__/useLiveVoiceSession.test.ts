@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { speechApi } from '@/services/api/endpoints/speech';
+import { speak } from '@/services/speaker';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { useToastStore } from '@/store/useToastStore';
 
 import { useLiveVoiceSession } from '../useLiveVoiceSession';
@@ -18,6 +20,7 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn(async () => undefined),
 }));
 jest.mock('@/services/api/endpoints/speech');
+jest.mock('@/services/speaker', () => ({ speak: jest.fn() }));
 jest.mock('@/store/useChatStore', () => ({
   useChatStore: (select: (s: { send: typeof mockSend }) => unknown) => select({ send: mockSend }),
 }));
@@ -37,6 +40,8 @@ beforeEach(() => {
   audio.setAudioModeAsync.mockResolvedValue(undefined);
   mockStream.start.mockResolvedValue(undefined);
   mockSend.mockResolvedValue(null);
+  jest.mocked(speak).mockResolvedValue({ stop: jest.fn() });
+  usePreferencesStore.getState().reset();
   useToastStore.setState({ current: null });
 });
 
@@ -100,5 +105,46 @@ describe('live voice session', () => {
     await unmount();
     await act(async () => finishTranscribing({ text: 'too late', model: 'm', language: null }));
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('reads Nudge’s reply aloud, in the chosen tone', async () => {
+    transcribe.mockResolvedValue({ text: 'hello', model: 'm', language: null });
+    mockSend.mockResolvedValue({ id: 'r1', role: 'assistant', text: 'Hi **Ada**!' });
+    usePreferencesStore.getState().set({ tone: 'firm' });
+    const { result } = await renderHook(() => useLiveVoiceSession());
+    await waitFor(() => expect(result.current.phase).toBe('listening'));
+    await act(async () => mockOnBuffer(oneSecondOfAudio()));
+    await act(async () => result.current.toggleMic());
+    await waitFor(() => expect(speak).toHaveBeenCalled());
+    expect(jest.mocked(speak).mock.calls[0][0]).toBe('Hi **Ada**!'); // formatting is stripped later
+    expect(jest.mocked(speak).mock.calls[0][1]).toMatchObject({ tone: 'firm' });
+  });
+
+  it('stays silent when voice replies are switched off in settings', async () => {
+    transcribe.mockResolvedValue({ text: 'hello', model: 'm', language: null });
+    mockSend.mockResolvedValue({ id: 'r1', role: 'assistant', text: 'Hi Ada' });
+    usePreferencesStore.getState().setNotification('voice', false);
+    const { result } = await renderHook(() => useLiveVoiceSession());
+    await waitFor(() => expect(result.current.phase).toBe('listening'));
+    await act(async () => mockOnBuffer(oneSecondOfAudio()));
+    await act(async () => result.current.toggleMic());
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('does not read out an error message', async () => {
+    transcribe.mockResolvedValue({ text: 'hello', model: 'm', language: null });
+    mockSend.mockResolvedValue({
+      id: 'r1',
+      role: 'assistant',
+      text: 'Something went wrong',
+      failed: true,
+    });
+    const { result } = await renderHook(() => useLiveVoiceSession());
+    await waitFor(() => expect(result.current.phase).toBe('listening'));
+    await act(async () => mockOnBuffer(oneSecondOfAudio()));
+    await act(async () => result.current.toggleMic());
+    await waitFor(() => expect(result.current.phase).toBe('idle'));
+    expect(speak).not.toHaveBeenCalled();
   });
 });

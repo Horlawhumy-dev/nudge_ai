@@ -27,9 +27,10 @@ Reminder apps either stay silent or nag. Alarms startle, notifications get muted
 | Tool planning, multi-step reasoning, structured outputs | **Muse Spark 1.2** (`muse-spark-1.2`) via Meta Model API | Chat agent, `smart` tier |
 | Hard planning and photo / screenshot → tasks and habits | **Muse Spark 1.3** (`muse-spark-1.3`), multimodal | `deep` tier, `POST /vision/extract` |
 | Voice input | **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | `POST /speech/transcribe`, voice mode |
+| Spoken replies (text to speech) | **ElevenLabs** (not Meta: Meta has no speech-output model) | `POST /speech/synthesize`, voice mode and the tone preview |
 | Coding | **Muse Code** | Used to build this project |
 
-A tiered router picks the model per request with deterministic rules first, escalates when confidence is low, enforces a per-user budget, and fronts everything with a semantic cache. Model IDs are set in `nudgeai_backend/.env` (`MODEL_FAST`, `MODEL_SMART`, `MODEL_DEEP`, `MUSE_VOICE_MODEL`). We avoid the `-contributor` Muse Spark variants because they let Meta train on user content. Voice audio is processed in memory and never stored.
+A tiered router picks the model per request with deterministic rules first, escalates when confidence is low, enforces a per-user budget, and fronts everything with a semantic cache. Model IDs are set in `nudgeai_backend/.env` (`MODEL_FAST`, `MODEL_SMART`, `MODEL_DEEP`, `MUSE_VOICE_MODEL`). We avoid the `-contributor` Muse Spark variants because they let Meta train on user content. Voice audio you speak is processed in memory and never stored. The one non-Meta AI service is ElevenLabs, for speech output only.
 
 We are targeting the main track prizes plus **Best Build on Open Weights** and **Best Agentic Use-Case**.
 
@@ -108,7 +109,7 @@ make install
 make start
 ```
 
-Without API keys the backend uses a deterministic fake model client, so tests and local runs work offline. Without `EXPO_PUBLIC_API_URL` the app runs in an offline demo mode with sample data. Optional keys: `CLOUDINARY_*` (profile photos; local disk otherwise), `EXPO_ACCESS_TOKEN` (push).
+Without API keys the backend uses a deterministic fake model client, so tests and local runs work offline. Without `EXPO_PUBLIC_API_URL` the app runs in an offline demo mode with sample data. Optional keys: `CLOUDINARY_*` (profile photos; local disk otherwise), `ELEVENLABS_API_KEY` (spoken replies; the phone's own voice otherwise), `EXPO_ACCESS_TOKEN` (push).
 
 Quality gates: `make check` in each project (read-only: lint, types, tests).
 

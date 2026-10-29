@@ -149,7 +149,7 @@ saved), and the photo button reads tasks off a picture. In demo mode it gives sc
 reachable from every tab: every tab has a round Nudge button on the right (tap to chat, press and hold to talk; on Habits and Tasks it sits above the "+"), the Home banner and Progress insight cards open it (insights pre-send a
 question), and Settings → Nudge AI lists chat, voice, tone, history and the weekly report.
 
-**One non-Meta piece:** Settings → AI voice & tone → "Preview your Nudge" reads the sample reminder aloud with the phone's built-in text-to-speech (`expo-speech`), because Meta offers speech-to-text but no speech output. Nothing is sent anywhere, and no other screen speaks.
+**One non-Meta piece:** spoken output. Meta offers speech-to-text but no speech-output model, so replies read aloud in voice mode, and Settings → AI voice & tone → "Preview your Nudge", use ElevenLabs through the backend (`POST /speech/synthesize`). If the backend has no `ELEVENLABS_API_KEY`, or the call fails, the app quietly speaks with the phone's built-in voice instead (`expo-speech`). Replies are trimmed to about 280 characters when read aloud, and the "Voice" switch in notification settings turns spoken replies off. The audio is played from a temporary cache file that is deleted when it finishes.
 
 ## Native-only behaviour to check on a device
 

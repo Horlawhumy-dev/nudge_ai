@@ -186,6 +186,7 @@ per-million-token rates in `app/models/registry.py`.
 
 - **Voice** (`POST /speech/transcribe`): the app sends a mono 16-bit WAV; the server forwards it to Meta's
   speech model and returns text. Audio is held in memory only, never written to disk or the database.
+- **Spoken replies** (`POST /speech/synthesize`): ElevenLabs text to speech, the one non-Meta AI service, because Meta has no speech-output model. Returns MP3. 503 when `ELEVENLABS_API_KEY` is unset (the app then uses the phone's voice), 502 when the service fails. Billed per character, so requests are capped (`TTS_MAX_CHARS`), rate limited and recent results cached. Free ElevenLabs plans can only use *premade* voices through the API (library voices return 402); the default is "Sarah".
 - **Photos** (`POST /vision/extract`): a to-do list or whiteboard becomes task and habit *proposals*.
   The model gets only the two "create" tools, and text inside the image is treated as data, so an image
   cannot trigger other actions. Nothing is saved until the user confirms.

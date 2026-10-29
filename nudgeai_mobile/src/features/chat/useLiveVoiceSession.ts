@@ -1,10 +1,12 @@
 import { requestRecordingPermissionsAsync, setAudioModeAsync, useAudioStream } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useSpeaker } from '@/hooks/useSpeaker';
 import { concatInt16, encodeWav, resampleInt16, SPEECH_SAMPLE_RATE, toMono } from '@/lib/wav';
 import { speechApi } from '@/services/api/endpoints/speech';
 import { ApiError } from '@/services/api/errors';
 import { useChatStore } from '@/store/useChatStore';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { toast } from '@/store/useToastStore';
 
 import type { VoicePhase } from './useVoiceSession';
@@ -21,6 +23,10 @@ const MIN_SAMPLES = SPEECH_SAMPLE_RATE * 0.4;
  */
 export function useLiveVoiceSession() {
   const send = useChatStore((s) => s.send);
+  // "Voice" in notification settings: when off, replies stay silent text.
+  const readRepliesAloud = usePreferencesStore((s) => s.notifications.voice);
+  const tone = usePreferencesStore((s) => s.tone);
+  const { say, stop: stopSpeaking } = useSpeaker();
   const [phase, setPhase] = useState<VoicePhase>('idle');
   const [heard, setHeard] = useState('');
   const chunks = useRef<Int16Array[]>([]);
@@ -84,11 +90,13 @@ export function useLiveVoiceSession() {
     if (!alive.current) return;
     setHeard(text);
     setPhase('generating');
-    await send(text, { via: 'voice' });
+    const reply = await send(text, { via: 'voice' });
     setPhase('idle');
-  }, [send, stopStream]);
+    if (reply && !reply.failed && readRepliesAloud && alive.current) void say(reply.text, tone);
+  }, [send, stopStream, readRepliesAloud, say, tone]);
 
   const listen = useCallback(async () => {
+    stopSpeaking(); // never record over our own voice
     const permission = await requestRecordingPermissionsAsync();
     if (!alive.current) return;
     if (!permission.granted) {
@@ -113,7 +121,7 @@ export function useLiveVoiceSession() {
       toast.error('Couldn’t start the microphone. Try again.');
       setPhase('idle');
     }
-  }, [finish, stream, stopStream]);
+  }, [finish, stream, stopStream, stopSpeaking]);
 
   // Start listening as soon as voice mode opens; always release the microphone on the way out.
   useEffect(() => {

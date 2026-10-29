@@ -16,4 +16,17 @@ export const speechApi = {
     });
     return data;
   },
+
+  /**
+   * Spoken audio (MP3) for a short piece of text, from the backend's voice service.
+   * Rejects with an ApiError; 503 means spoken output isn't set up on the server.
+   */
+  async synthesize(text: string) {
+    const { data } = await api.post<ArrayBuffer>(
+      '/speech/synthesize',
+      { text },
+      { responseType: 'arraybuffer', timeout: 30_000 }
+    );
+    return new Uint8Array(data);
+  },
 };
