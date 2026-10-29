@@ -9,7 +9,7 @@ export function buildSeedNotifications(now: number = Date.now()): NudgeNotificat
       id: 'n1',
       kind: 'nudge',
       title: 'Deep work in 10 mins',
-      body: 'Hey Rophy, your deep work session starts soon. You’re on a 7-day streak, keep it going!',
+      body: 'Hey Champion, your deep work session starts soon. You’re on a 7-day streak, keep it going!',
       createdAt: now - 0.2 * HOUR,
       read: false,
       href: '/tasks',

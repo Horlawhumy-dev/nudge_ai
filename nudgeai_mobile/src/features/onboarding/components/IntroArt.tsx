@@ -42,7 +42,7 @@ export function RhythmArt() {
           contentFit="cover"
         />
         <Text variant="bodyLarge" color={colors.textSecondary} style={styles.bubbleText}>
-          Hey Rophy! Your deep work session starts in 10 mins. Ready?
+          Hey Champion! Your deep work session starts in 10 mins. Ready?
         </Text>
       </View>
       <View style={[styles.bubble, styles.bubbleTwo]}>

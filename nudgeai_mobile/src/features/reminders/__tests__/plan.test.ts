@@ -11,7 +11,7 @@ const quiet = {
   weekends: false,
 };
 const prefs: ReminderPrefs = {
-  name: 'Rophy',
+  name: 'Champion',
   tone: 'gentle',
   includeStreak: true,
   useEmojis: false,
@@ -47,10 +47,10 @@ describe('reminder planning', () => {
   it('writes tone-matched copy', () => {
     const habit = { id: 'h1', name: 'Morning Workout', emoji: '💪' };
     expect(reminderCopy(habit, prefs).body).toBe(
-      'Hey Rophy, ready for Morning Workout when you are.'
+      'Hey Champion, ready for Morning Workout when you are.'
     );
     expect(reminderCopy(habit, { ...prefs, tone: 'firm' }).body).toBe(
-      'Rophy. Morning Workout. Now. Let’s go.'
+      'Champion. Morning Workout. Now. Let’s go.'
     );
     expect(reminderCopy(habit, prefs, 7).body).toMatch(/7-day streak/);
     expect(reminderCopy(habit, prefs, 1).body).not.toMatch(/streak/);
