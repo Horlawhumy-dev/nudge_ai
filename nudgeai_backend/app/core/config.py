@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     chat_history_messages: int = 20
     # Generous ceiling, few retries: cold starts on hosted tiers are slow, and
     # a 30s timeout failed almost every call when this was first measured.
+    # Muse Spark Open (the fast tier on Baseten) always reasons, and the reasoning is billed: with
+    # the default effort a 15-word nudge cost ~650 hidden tokens and 8 s. "low" roughly halves
+    # that. Sent to Baseten only. Empty string means don't send it. Do NOT cap max_tokens
+    # tightly instead: the cap is spent on reasoning and the reply comes back empty.
+    fast_reasoning_effort: str = "low"
     model_timeout_seconds: float = 120.0
     model_max_retries: int = 1
     model_retry_backoff_seconds: float = 1.0
