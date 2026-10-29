@@ -60,6 +60,11 @@ async def extract(request: Request, user: CurrentUser, session: SessionDep) -> E
         raise HTTPException(status_code=400, detail="no image in the request body")
     ext = media_service.sniff_image(bytes(buf[:16]))
     if ext is None:  # the file's own bytes decide, not the declared content type
+        log.warning(
+            "vision: unsupported image, declared %s, first bytes %s",
+            request.headers.get("content-type"),
+            bytes(buf[:12]).hex(),
+        )
         raise HTTPException(status_code=415, detail="unsupported image; use PNG, JPEG or WebP")
 
     today = core_service.local_today(user)
