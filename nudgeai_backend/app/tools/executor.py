@@ -191,6 +191,7 @@ class Executor:
             ]
 
             duplicates = 0
+            proposed = 0
             for call in reply.tool_calls:
                 # Dedupe on the *call*, not its id. A model that loops mints a
                 # fresh id every hop, so an id-keyed guard never fires: observed
@@ -227,6 +228,7 @@ class Executor:
                         session, user_id, call_id=call.id, tool=registered, args=call.arguments
                     )
                     result_proposals.append(proposals_mod.to_schema(row))
+                    proposed += 1
                     tool_results.append(
                         {"tool": call.name, "ok": True, "proposed": True, "id": str(row.id)}
                     )
@@ -246,6 +248,13 @@ class Executor:
                     metrics.tool_calls_total.labels(tool=call.name, result="error").inc()
                     tool_results.append({"tool": call.name, "ok": False, "error": exc.message})
                     tool_error_streak += 1
+
+            # Every call only became a confirmation card, and the model already said something
+            # with it ("I'll book that dentist visit..."). There is nothing new to read back, so
+            # another round trip would only reword the same sentence (2.5 to 3 s on each turn).
+            if reply.content.strip() and proposed == len(reply.tool_calls):
+                log.info("proposals created with a reply in hand; ending the turn early")
+                break
 
             messages = messages + [
                 {

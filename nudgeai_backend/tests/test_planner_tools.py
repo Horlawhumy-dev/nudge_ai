@@ -336,3 +336,52 @@ async def test_vision_input_validation_and_auth(
         f"{API}/vision/extract", content=PNG, headers={"Content-Type": "image/png"}
     )
     assert anon.status_code == 401
+
+
+# ------------------------------------------------------------- one model call for a booking
+
+
+async def test_a_booking_that_already_has_a_sentence_takes_one_model_call(
+    client: AsyncClient, auth_headers: Headers
+) -> None:
+    """The reply "I'll book that" plus a confirm card is complete; asking the model again to
+    reword it only added seconds."""
+    fake = FakeClient().script(
+        "book my dentist",
+        content="I'll book your dentist for tomorrow at 3 pm.",
+        tool_calls=[
+            {"name": "task_create", "arguments": {"title": "Dentist", "start_time": "15:00"}}
+        ],
+    )
+    events = await _chat(client, auth_headers, fake, "book my dentist for tomorrow at 3")
+    assert len(fake.calls) == 1
+    assert events["message"][0]["content"] == "I'll book your dentist for tomorrow at 3 pm."
+    assert len(events["proposal"]) == 1
+
+
+async def test_a_silent_proposal_still_gets_a_second_call_for_the_words(
+    client: AsyncClient, auth_headers: Headers
+) -> None:
+    fake = FakeClient().script(
+        "book my dentist",
+        content="",
+        tool_calls=[{"name": "task_create", "arguments": {"title": "Dentist"}}],
+    )
+    await _chat(client, auth_headers, fake, "book my dentist")
+    assert len(fake.calls) >= 2  # no sentence yet, so the model gets another turn to write one
+
+
+async def test_a_look_up_alongside_a_proposal_still_waits_for_its_result(
+    client: AsyncClient, auth_headers: Headers
+) -> None:
+    """If the model also asked to read something, it needs the answer before it can speak."""
+    fake = FakeClient().script(
+        "plan my day",
+        content="Let me check and add that.",
+        tool_calls=[
+            {"id": "a", "name": "tasks_list", "arguments": {"status": "all"}},
+            {"id": "b", "name": "task_create", "arguments": {"title": "Walk"}},
+        ],
+    )
+    await _chat(client, auth_headers, fake, "plan my day")
+    assert len(fake.calls) >= 2
