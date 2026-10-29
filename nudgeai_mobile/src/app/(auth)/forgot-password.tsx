@@ -13,7 +13,8 @@ import { colors } from '@/theme';
 export default function ForgotPassword() {
   const router = useRouter();
   const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
-  const email = useField('', validateEmail);
+  const remembered = useAuthStore((s) => s.rememberedEmail);
+  const email = useField(remembered ?? '', validateEmail);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

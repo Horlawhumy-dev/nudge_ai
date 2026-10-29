@@ -92,6 +92,13 @@ type AuthState = {
   /** Email a reset code or verification code was sent to. */
   pendingEmail: string | null;
   hasSeenIntro: boolean;
+  /**
+   * The email of the last account that signed in on this phone, so login only asks for the
+   * password. Not a secret; the password and tokens are never kept here. Survives sign-out.
+   */
+  rememberedEmail: string | null;
+  /** "Not you?": go back to asking for the email too. */
+  forgetRememberedEmail: () => void;
   /** The emailed reset code, kept in memory between the "enter code" and "new password" screens. */
   resetCode: string | null;
 
@@ -144,6 +151,7 @@ async function loadAccount(set: SetAuth) {
     status: onboarding.completed ? 'ready' : 'onboarding',
     user: fromApi(account, onboarding.name ?? undefined),
     pendingEmail: null,
+    rememberedEmail: account.email,
   });
   usePreferencesStore.getState().set({ plan: account.plan });
   // Bring the account's habits and tasks along. A hiccup here must not block signing in:
@@ -179,6 +187,9 @@ export const useAuthStore = create<AuthState>()(
       pendingEmail: null,
       hasSeenIntro: false,
 
+      rememberedEmail: null,
+      forgetRememberedEmail: () => set({ rememberedEmail: null }),
+
       markIntroSeen: () => set({ hasSeenIntro: true }),
 
       resetCode: null,
@@ -207,7 +218,12 @@ export const useAuthStore = create<AuthState>()(
         useTasksStore.getState().seedDemo();
         useNotificationsStore.getState().seedDemo();
         useChatStore.getState().seedDemo();
-        set({ status: 'ready', user: { ...DEMO_USER, email: email.trim() || DEMO_USER.email } });
+        const signedInAs = email.trim() || DEMO_USER.email;
+        set({
+          status: 'ready',
+          user: { ...DEMO_USER, email: signedInAs },
+          rememberedEmail: signedInAs,
+        });
       },
 
       signUp: async (name, email, password) => {
@@ -262,7 +278,7 @@ export const useAuthStore = create<AuthState>()(
         if (code !== DEMO_CODE) {
           throw new AuthError('That code isn’t right. Check it and try again.', 'code');
         }
-        set({ status: 'onboarding' });
+        set({ status: 'onboarding', rememberedEmail: get().user?.email ?? get().pendingEmail });
         return 'verified';
       },
 
@@ -414,7 +430,13 @@ export const useAuthStore = create<AuthState>()(
       deleteAccount: async (password) => {
         if (!DEMO_MODE) await authApi.deleteAccount(password); // throws if the password is wrong
         clearLocalData();
-        set({ status: 'signedOut', user: null, pendingEmail: null, resetCode: null });
+        set({
+          status: 'signedOut',
+          user: null,
+          pendingEmail: null,
+          resetCode: null,
+          rememberedEmail: null, // the account is gone, so is the shortcut to it
+        });
       },
 
       signOut: async () => {
@@ -438,6 +460,7 @@ export const useAuthStore = create<AuthState>()(
         user: s.status === 'unverified' ? null : s.user,
         pendingEmail: null,
         hasSeenIntro: s.hasSeenIntro,
+        rememberedEmail: s.rememberedEmail,
       }),
       // Clean up phones that already saved the old state.
       merge: (saved, current) => {

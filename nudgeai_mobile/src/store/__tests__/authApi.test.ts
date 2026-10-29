@@ -48,7 +48,14 @@ const onboarding = (completed: boolean) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   auth.resendCode.mockResolvedValue(undefined);
-  useAuthStore.setState({ status: 'signedOut', user: null, pendingEmail: null, resetCode: null });
+  auth.logIn.mockReset().mockResolvedValue(undefined); // a failing login must not leak into the next test
+  useAuthStore.setState({
+    status: 'signedOut',
+    user: null,
+    pendingEmail: null,
+    resetCode: null,
+    rememberedEmail: null,
+  });
   useHabitsStore.getState().clear();
 });
 
@@ -97,6 +104,47 @@ describe('auth store with a backend', () => {
       pendingEmail: 'ada@example.com',
     });
     expect(auth.resendCode).toHaveBeenCalledWith('ada@example.com');
+  });
+
+  it('remembers the email once someone signs in, and keeps it after sign-out', async () => {
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockResolvedValue(onboarding(true));
+    await useAuthStore.getState().signIn('ada@example.com', 'Passw0rd!');
+    expect(useAuthStore.getState().rememberedEmail).toBe('ada@example.com');
+
+    await useAuthStore.getState().signOut();
+    expect(useAuthStore.getState()).toMatchObject({
+      status: 'signedOut',
+      rememberedEmail: 'ada@example.com', // so login only asks for the password
+    });
+    // saved to disk, but never the password or anything secret
+    const saved = useAuthStore.persist.getOptions().partialize?.(useAuthStore.getState());
+    expect(saved).toMatchObject({ rememberedEmail: 'ada@example.com' });
+    expect(JSON.stringify(saved)).not.toMatch(/password|token/i);
+  });
+
+  it('remembers the email of a brand-new account after it verifies', async () => {
+    auth.signUp.mockResolvedValue(apiUser);
+    await useAuthStore.getState().signUp('Ada', 'ada@example.com', 'Passw0rd!');
+    expect(useAuthStore.getState().rememberedEmail).toBeNull(); // not registered until verified
+    profile.get.mockResolvedValue(apiUser);
+    profile.getOnboarding.mockResolvedValue(onboarding(false));
+    await useAuthStore.getState().verifyEmail('4821');
+    expect(useAuthStore.getState().rememberedEmail).toBe('ada@example.com');
+  });
+
+  it('"Not you?" forgets it, and deleting the account does too', async () => {
+    useAuthStore.setState({ rememberedEmail: 'ada@example.com' });
+    useAuthStore.getState().forgetRememberedEmail();
+    expect(useAuthStore.getState().rememberedEmail).toBeNull();
+
+    useAuthStore.setState({
+      status: 'ready',
+      user: { id: 'u1', name: 'Ada', email: 'ada@example.com' },
+      rememberedEmail: 'ada@example.com',
+    });
+    await useAuthStore.getState().deleteAccount('Passw0rd!');
+    expect(useAuthStore.getState().rememberedEmail).toBeNull();
   });
 
   it('does not remember "waiting for the code" across app restarts', () => {
