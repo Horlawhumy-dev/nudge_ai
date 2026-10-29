@@ -112,6 +112,7 @@ async def create_notification(
     title: str,
     body: str,
     habit_id: UUID | None = None,
+    task_id: UUID | None = None,
     at: datetime | None = None,
 ) -> Nudge:
     """A delivered, non-engine message such as the welcome note or a weekly insight."""
@@ -119,6 +120,7 @@ async def create_notification(
     row = Nudge(
         user_id=user_id,
         habit_id=habit_id,
+        task_id=task_id,
         scheduled_for=now,
         sent_at=now,
         status="sent",
@@ -173,12 +175,13 @@ def _message(token: str, row: Nudge) -> dict[str, object]:
         "title": row.title or "Nudge",
         "body": row.body or "",
         "sound": "default",
-        "priority": "high" if row.kind == "streak" else "default",
+        "priority": "high" if row.kind in ("streak", "reminder") else "default",
         "channelId": "habit-reminders",
         "data": {
             "nudge_id": str(row.id),
             "kind": row.kind,
             "habit_id": str(row.habit_id) if row.habit_id else None,
+            "task_id": str(row.task_id) if getattr(row, "task_id", None) else None,
         },
     }
 

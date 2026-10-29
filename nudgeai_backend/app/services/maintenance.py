@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app.db.session import session_scope
-from app.services import recurrence, report_service
+from app.services import recurrence, report_service, task_reminders
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 class MaintenanceReport:
     recurring_created: int = 0
     weekly_reports_sent: int = 0
+    task_reminders_sent: int = 0
 
 
 async def run_maintenance(now_utc: datetime | None = None) -> MaintenanceReport:
@@ -35,4 +36,12 @@ async def run_maintenance(now_utc: datetime | None = None) -> MaintenanceReport:
             reports = await report_service.send_due_weekly_reports(session, now)
     except Exception:  # noqa: BLE001
         log.exception("maintenance: weekly reports failed")
-    return MaintenanceReport(recurring_created=recurring, weekly_reports_sent=reports)
+    reminders = 0
+    try:
+        async with session_scope() as session:
+            reminders = await task_reminders.send_due_task_reminders(session, now)
+    except Exception:  # noqa: BLE001
+        log.exception("maintenance: task reminders failed")
+    return MaintenanceReport(
+        recurring_created=recurring, weekly_reports_sent=reports, task_reminders_sent=reminders
+    )

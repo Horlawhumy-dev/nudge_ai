@@ -551,6 +551,7 @@ async def update_task(session: AsyncSession, user: User, task_id: UUID, **kwargs
         day = day or local_today(user)
         task.date, task.start_time, task.end_time = day, start, end
         task.due_at = task_due_at(day, start, end, zone)
+        task.reminded_at = None  # a new time gets its own reminder
     await session.commit()
     await session.refresh(task)
     return task
